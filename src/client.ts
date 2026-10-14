@@ -9,11 +9,24 @@ export interface OneClientOptions {
 }
 
 export interface OneConnection {
+  id?: string
   key: string
   platform: string
   name?: string | null
   state?: string
   tags?: string[]
+  active?: boolean
+}
+
+export interface OneConnector {
+  platform: string
+  name: string
+  title?: string
+  description?: string
+  image?: string
+  category?: string
+  tools?: number
+  oauth?: boolean
   active?: boolean
 }
 
@@ -101,12 +114,13 @@ export class OneClient {
     return JSON.parse(text) as T
   }
 
-  async listConnections(params: { platform?: string; keys?: string[] } & RequestScope = {}): Promise<OneConnection[]> {
+  async listConnections(params: { platform?: string; keys?: string[]; tags?: string[] } & RequestScope = {}): Promise<OneConnection[]> {
     const out: OneConnection[] = []
     for (let page = 1; ; page++) {
       const q = new URLSearchParams({ limit: '100', page: String(page) })
       if (params.platform) q.set('platform', params.platform)
       if (params.keys?.length) q.set('key', params.keys.join(','))
+      if (params.tags?.length) q.set('tags', params.tags.join(','))
       const res = await this.getJson<{ rows: OneConnection[]; pages: number }>(`/vault/connections?${q}`, params)
       out.push(...res.rows)
       if (page >= res.pages || res.rows.length === 0) break
@@ -137,6 +151,42 @@ export class OneClient {
   async countActions(platform: string): Promise<number> {
     const res = await this.getJson<{ total: number }>(`/available-actions/${encodeURIComponent(platform)}?limit=1&page=1`)
     return res.total
+  }
+
+  async listConnectors(): Promise<OneConnector[]> {
+    const page = (n: number) => this.getJson<{ rows: OneConnector[]; pages: number }>(`/available-connectors?limit=150&page=${n}`)
+    const first = await page(1)
+    const rest = await Promise.all(Array.from({ length: Math.max(0, first.pages - 1) }, (_, i) => page(i + 2)))
+    const seen = new Map<string, OneConnector>()
+    for (const row of [first, ...rest].flatMap((r) => r.rows)) seen.set(row.platform, row)
+    return [...seen.values()]
+  }
+
+  async whoami(): Promise<{ organization?: { id: string } | null; project?: { id: string } | null }> {
+    return this.getJson('/users/whoami')
+  }
+
+  /** Replaces the connection's tag set. */
+  async tagConnection(id: string, tags: string[]): Promise<void> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/vault/connections/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { ...this.headers(), 'content-type': 'application/json' },
+      body: JSON.stringify({ tags }),
+    })
+    if (!res.ok) throw new OneApiError(res.status, await res.text())
+  }
+
+  async deleteConnection(id: string): Promise<void> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/vault/connections/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: this.headers(),
+    })
+    if (!res.ok && res.status !== 404) throw new OneApiError(res.status, await res.text())
+  }
+
+  /** `test` for `sk_test_…` keys, `live` otherwise. */
+  get environment(): 'test' | 'live' {
+    return this.secret.startsWith('sk_test_') ? 'test' : 'live'
   }
 
   async searchActions(platform: string, query: string, limit = 5): Promise<OneAction[]> {

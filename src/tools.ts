@@ -89,11 +89,7 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
 
   const getKnowledge = (id: string) => knowledge.get(id, () => client.getKnowledge(id))
 
-  const truncate = (output: unknown) => {
-    const text = typeof output === 'string' ? output : JSON.stringify(output)
-    if (text === undefined || text.length <= maxResult) return output
-    return `${text.slice(0, maxResult)}\n…[truncated ${text.length - maxResult} characters; narrow the request with filters or pagination]`
-  }
+  const truncate = truncateFor(maxResult)
 
   return async (args = {}) => {
     const connectUserId = options.connectUserId?.(args)
@@ -144,27 +140,18 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
       const docs = await mapLimit(selected, KNOWLEDGE_CONCURRENCY, (a) => getKnowledge(a.action.systemId).catch(() => undefined))
 
       selected.forEach(({ action, toolId }, i) => {
-        const doc = docs[i]
-        const input = toToolInputSchema(doc?.ioSchema?.inputSchema) ?? OPEN_INPUT_SCHEMA
         const id = uniqueId(toolId, taken)
         taken.add(id)
-        tools[id] = createTool({
+        tools[id] = actionTool({
+          client,
           id,
-          description: describe(platform, action, doc),
-          inputSchema: input.schema as any,
+          platform,
+          action,
+          doc: docs[i],
+          connectionKey: connection.key,
+          connectUserId,
           requireApproval: needsApproval(config, id),
-          toModelOutput: truncate,
-          execute: async (data: any) => {
-            const res = await client.execute({
-              action,
-              connectionKey: connection.key,
-              pathVariables: data?.path,
-              query: data?.query,
-              body: data?.body,
-              connectUserId,
-            })
-            return res
-          },
+          truncate,
         })
       })
     }
@@ -173,6 +160,60 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
       Object.assign(tools, discoverTools(client, discoverPlatforms, { getKnowledge, connectUserId, truncate }))
     }
     return tools
+  }
+}
+
+export interface ActionToolInput {
+  client: OneClient
+  id: string
+  platform: string
+  action: OneAction
+  doc?: OneActionKnowledge
+  connectionKey: string
+  connectUserId?: string
+  requireApproval?: boolean
+  description?: string
+  truncate?: (output: unknown) => unknown
+}
+
+/** One Mastra tool for one One action, bound to one connection. */
+export function actionTool(t: ActionToolInput) {
+  const input = toToolInputSchema(t.doc?.ioSchema?.inputSchema) ?? OPEN_INPUT_SCHEMA
+  return createTool({
+    id: t.id,
+    description: t.description ?? describe(t.platform, t.action, t.doc),
+    inputSchema: input.schema as any,
+    requireApproval: t.requireApproval ?? false,
+    ...(t.truncate ? { toModelOutput: t.truncate } : {}),
+    execute: async (data: any) =>
+      t.client.execute({
+        action: t.action,
+        connectionKey: t.connectionKey,
+        pathVariables: data?.path,
+        query: data?.query,
+        body: data?.body,
+        connectUserId: t.connectUserId,
+      }),
+  })
+}
+
+/** Stable tool ids for a platform catalog, in catalog order, with collisions suffixed. */
+export function catalogToolIds(platform: string, catalog: OneAction[]): Map<string, OneAction> {
+  const taken = new Set<string>()
+  const out = new Map<string, OneAction>()
+  for (const action of catalog) {
+    const id = uniqueId(toolIdFor(platform, action.title), taken)
+    taken.add(id)
+    out.set(id, action)
+  }
+  return out
+}
+
+export function truncateFor(maxChars: number) {
+  return (output: unknown) => {
+    const text = typeof output === 'string' ? output : JSON.stringify(output)
+    if (text === undefined || text.length <= maxChars) return output
+    return `${text.slice(0, maxChars)}\n…[truncated ${text.length - maxChars} characters; narrow the request with filters or pagination]`
   }
 }
 
@@ -205,7 +246,7 @@ function needsApproval(config: PlatformConfig, toolId: string): boolean {
   return Array.isArray(config.requireApproval) && matchesAny(toolId, config.requireApproval)
 }
 
-function describe(platform: string, action: OneAction, doc?: OneActionKnowledge): string {
+export function describe(platform: string, action: OneAction, doc?: OneActionKnowledge): string {
   const summary =
     (typeof doc?.ioSchema?.inputSchema?.description === 'string' && doc.ioSchema.inputSchema.description) ||
     section(doc?.knowledge, 'Description') ||
