@@ -267,6 +267,13 @@ export function catalogToolIds(platform: string, catalog: OneAction[]): Map<stri
   return out
 }
 
+const MAX_DOC_CHARS = 8000
+
+function trimDocs(docs: string | undefined): string | undefined {
+  if (!docs || docs.length <= MAX_DOC_CHARS) return docs
+  return `${docs.slice(0, MAX_DOC_CHARS)}\n…[truncated; call one_get_action for the full documentation]`
+}
+
 /** A `toModelOutput` that caps the result's size. It must return an AI SDK tool-result part, not the raw value. */
 export function truncateFor(maxChars: number) {
   return (output: unknown): { type: 'text'; value: string } | { type: 'json'; value: unknown } => {
@@ -352,7 +359,7 @@ function discoverTools(
   return {
     one_find_actions: createTool({
       id: 'one_find_actions',
-      description: `Search the actions available on ${names.join(', ')}. Returns action ids to pass to one_get_action and one_run_action.`,
+      description: `Find the action for what you want to do on ${names.join(', ')}. Returns action ids for one_run_action; the best match usually carries its documentation (parameters, rules, examples), so read that before running it. Call one_get_action for the exact input schema.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -362,9 +369,18 @@ function discoverTools(
         required: ['platform', 'query'],
         additionalProperties: false,
       } as any,
+      toModelOutput: ctx.truncate,
       execute: async ({ platform, query }: any) => {
-        const found = await backend.searchActions(platform, query, 8)
-        return found.map((a) => ({ actionId: a.systemId, title: a.title, method: a.method, path: a.path }))
+        const summary = (a: OneAction) => ({ actionId: a.systemId, title: a.title, method: a.method, path: a.path })
+        // One's selector picks the action and returns its docs; fall back to search where it isn't available.
+        const found = await backend.find?.(platform, query).catch(() => undefined)
+        if (found?.selected?.length) {
+          return [
+            ...found.selected.map((a) => ({ ...summary(a), confidence: found.confidence, documentation: trimDocs(a.knowledge) })),
+            ...(found.alternatives ?? []).slice(0, 7).map(summary),
+          ]
+        }
+        return (await backend.searchActions(platform, query, 8)).map(summary)
       },
     }),
     one_get_action: createTool({

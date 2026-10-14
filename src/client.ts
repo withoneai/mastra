@@ -57,6 +57,15 @@ export interface OneAction {
   tags?: string[]
 }
 
+export interface FoundActions {
+  platform: string
+  intent: string
+  confidence?: number
+  /** The chosen action(s), each with a documentation digest in `knowledge`. */
+  selected: Array<OneAction & { knowledge?: string }>
+  alternatives?: OneAction[]
+}
+
 export interface OneActionKnowledge {
   _id: string
   title: string
@@ -210,6 +219,21 @@ export class OneClient {
   async searchActions(platform: string, query: string, limit = 5): Promise<OneAction[]> {
     const q = new URLSearchParams({ query, limit: String(limit) })
     return this.getJson<OneAction[]>(`/available-actions/search/${encodeURIComponent(platform)}?${q}`)
+  }
+
+  /**
+   * One's action selector: for each `{ platform, intent }` it picks the action, with a confidence
+   * and a documentation digest, plus alternatives. Secret keys only; a Connect grant uses search.
+   */
+  async findActions(requests: Array<{ platform: string; intent: string }>, task?: string): Promise<FoundActions[]> {
+    const res = await this.fetchImpl(`${this.baseUrl}/v1/available-actions/find`, {
+      method: 'POST',
+      headers: { ...this.headers(), 'content-type': 'application/json' },
+      body: JSON.stringify({ requests, ...(task ? { task } : {}) }),
+    })
+    const text = await res.text()
+    if (!res.ok) throw new OneApiError(res.status, text)
+    return JSON.parse(text) as FoundActions[]
   }
 
   async getKnowledge(actionId: string): Promise<OneActionKnowledge> {

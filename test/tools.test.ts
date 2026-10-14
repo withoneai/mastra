@@ -6,7 +6,7 @@ interface Call {
   init?: RequestInit
 }
 
-function fakeOne(opts: { actions?: number } = {}) {
+function fakeOne(opts: { actions?: number; findFails?: boolean } = {}) {
   const calls: Call[] = []
   const actions = Array.from({ length: opts.actions ?? 2 }, (_, i) =>
     i === 0
@@ -37,6 +37,11 @@ function fakeOne(opts: { actions?: number } = {}) {
       return json({ rows: [{ key: 'test::cal-com::default::1', platform: 'cal-com', state: 'operational', active: true }], pages: 1 })
     }
     if (url.pathname.startsWith('/v1/available-actions/search/')) return json(actions.slice(0, 2))
+    if (url.pathname === '/v1/available-actions/find') {
+      if (opts.findFails) return json({ error: 'nope' }, 500)
+      const [{ platform, intent }] = JSON.parse(String(init!.body)).requests
+      return json([{ platform, intent, confidence: 0.92, selected: [{ ...actions[0], knowledge: '# Get Event Type\n\nPass the id in the path.' }], alternatives: [actions[1]] }])
+    }
     if (url.pathname.startsWith('/v1/available-actions/')) return json({ rows: actions, pages: 1, total: actions.length })
     if (url.pathname === '/v1/knowledge') {
       const row = knowledge[url.searchParams.get('_id')!]
@@ -99,9 +104,17 @@ describe('oneTools', () => {
     expect(warnings[0]).toMatch(/60 actions/)
 
     const found = await tools.one_find_actions.execute({ platform: 'cal-com', query: 'event' }, {})
-    expect(found[0].actionId).toBe('conn_mod_def::get')
+    expect(found[0]).toMatchObject({ actionId: 'conn_mod_def::get', confidence: 0.92, documentation: expect.stringMatching(/Pass the id/) })
+    expect(found[1]).toEqual({ actionId: 'conn_mod_def::create', title: 'Create Booking', method: 'POST', path: '/v1/cal-com/create-booking' })
     const ran = await tools.one_run_action.execute({ actionId: 'conn_mod_def::get', path: { id: '1' } }, {})
     expect(ran.ok).toBe(true)
+  })
+
+  it("falls back to catalog search when One's action selector is unavailable", async () => {
+    const { fetchImpl } = fakeOne({ actions: 60, findFails: true })
+    const tools = (await oneTools({ secret: 'sk_test', fetch: fetchImpl, platforms: { 'cal-com': true }, onWarning: quiet })()) as any
+    const found = await tools.one_find_actions.execute({ platform: 'cal-com', query: 'event' }, {})
+    expect(found[0]).toEqual({ actionId: 'conn_mod_def::get', title: 'Get Event Type', method: 'GET', path: '/event-types/{{id}}' })
   })
 
   it('turns a platform with no connection into a connect tool that links to One', async () => {

@@ -1,4 +1,4 @@
-import type { ExecuteResult, OneAction, OneActionKnowledge, OneClient } from './client.js'
+import type { ExecuteResult, FoundActions, OneAction, OneActionKnowledge, OneClient } from './client.js'
 
 /** A connection the current caller can use. */
 export interface BackendConnection {
@@ -32,6 +32,8 @@ export interface Backend {
   countActions(platform: string): Promise<number>
   listActions(platform: string): Promise<OneAction[]>
   searchActions(platform: string, query: string, limit: number): Promise<OneAction[]>
+  /** One's action selector (picks the action and returns its docs). Absent for One Connect, which only has search. */
+  find?(platform: string, intent: string): Promise<FoundActions | undefined>
   knowledge(actionId: string): Promise<OneActionKnowledge>
   run(input: RunInput): Promise<RunResult>
 }
@@ -49,6 +51,7 @@ export function secretBackend(client: OneClient): Backend {
     countActions: (platform) => client.countActions(platform),
     listActions: (platform) => client.listActions(platform),
     searchActions: (platform, query, limit) => client.searchActions(platform, query, limit),
+    find: async (platform, intent) => (await client.findActions([{ platform, intent }]))[0],
     knowledge: (id) => client.getKnowledge(id),
     run: (input) => client.execute(input),
   }
