@@ -139,18 +139,31 @@ Open `http://localhost:4111`.
 
 ## 5. One in Studio's agent editor (no code)
 
-In Studio:
+Studio 1.77 hides the **Create agent** button unless its experimental UI is on. Stop the step-4 server and restart it with:
 
-1. Go to **Agents → Create agent** (or open `http://localhost:4111/cms/agents/create`).
-2. Fill in **Identity** and **Instructions**.
+```bash
+MASTRA_EXPERIMENTAL_UI=true npm run dev
+```
+
+Then in Studio:
+
+1. On **Agents**, click **Create agent**.
+2. Fill in **Identity** (a name, and any provider/model, e.g. Anthropic / `claude-sonnet-5-5`) and **Instructions**. Both are required before **Create agent** turns on. The other steps (Agents, Scorers, Workflows, Memory, Variables) are optional.
 3. In **Tools**, under integration tools, **One** shows as *Available* ("Act in 972+ apps through your One connections").
-4. Click **One**. The left column lists all One apps.
-5. Click **Linear** and search `list issues`. "List Issues" is first (see `docs/screenshots/studio-one-linear-tools.png`).
-6. Typing `linear` in **All** also lists Linear's actions.
-7. Tick **List Issues**, then **Add tools**, then choose one of your existing Linear connections when Studio asks. Then **Create agent**.
-8. Open the new agent. Its tool list shows `linear_list_issues`, resolved at runtime through `OneToolProvider`.
+4. Click **One**. The left column lists all One apps. Studio draws that list and it has no search box, so either scroll to **Linear**, or type `linear` in the search box with **All** selected, which lists Linear's actions.
+5. Click **Linear** and search `list issues`. "List Issues" is first (see `docs/screenshots/studio-one-linear-tools.png`). Tool descriptions read "POST /graphql" because Linear's actions have no description in One's catalog.
+6. Tick **List Issues**, then **Add tools**. Studio doesn't ask for a connection; with none pinned, the tool uses your first working Linear connection, the same default as `oneTools()`.
+7. Click **Create agent**.
+8. Check the agent's tools from a terminal (use the id Studio gave it, e.g. `linear-helper`):
+   ```bash
+   curl -s localhost:4111/api/agents/linear-helper | python3 -c "import json,sys;print(list(json.load(sys.stdin)['tools']))"
+   curl -s -X POST localhost:4111/api/agents/linear-helper/tools/linear_list_issues/execute \
+     -H 'content-type: application/json' \
+     -d '{"data":{"body":{"query":"query { issues(first: 3) { nodes { identifier title } } }","variables":{}}}}'; echo
+   ```
+   **Expect:** `['linear_list_issues']`, then `{"ok":true,"status":200,…}` with three real issues.
 
-> Steps 1–6 were captured in a headless browser. Steps 7–8 (tick → Add tools → pick a connection → Create agent) were only verified through the API calls Studio makes: creating a stored agent with a pinned One tool, then resolving and running it. They were not clicked through, so please confirm them in the browser.
+> Steps 1–8 were clicked through in Studio 1.77 on 2026-10-14. Step 8 failed (no tools) before `fix(provider)` cb56039: Studio saves no connection, and the provider rejected that.
 
 To try **Connect** in the editor, pick an app you haven't connected. Studio opens One's dashboard on that app's connect dialog. After you connect, Studio's status poll turns *completed* and the new connection is tagged on One with an `oneauth_…` id.
 
