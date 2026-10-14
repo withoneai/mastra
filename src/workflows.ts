@@ -1,7 +1,8 @@
 import { createStep } from '@mastra/core/workflows'
 import type { RequestContext } from '@mastra/core/request-context'
-import { OneApiError, OneClient, type OneAction, type OneConnection } from './client.js'
+import { OneApiError, OneClient, type OneAction } from './client.js'
 import { OPEN_INPUT_SCHEMA, toToolInputSchema } from './schema.js'
+import { connectBackend, secretBackend, type Backend, type OneConnectLike } from './backend.js'
 import { catalogToolIds, describe } from './tools.js'
 
 export interface OneStepOptions {
@@ -13,8 +14,13 @@ export interface OneStepOptions {
   id?: string
   /** Use this connection instead of the first operational one. */
   connectionKey?: string
-  /** Per-run end user for One Connect grant keys. */
-  connectUserId?: (args: { requestContext: RequestContext<any> }) => string | undefined
+  /**
+   * A One Connect client, to run the action for an end user with the access they granted.
+   * The step's schema still comes from the catalog, read with `secret` (your One key or the app's connect key).
+   */
+  connect?: OneConnectLike
+  /** Which end user this run is for. Required with `connect`. */
+  userId?: (args: { requestContext: RequestContext<any> }) => string | undefined
   /** Suspend before running until resumed with `{ approved: true }`. */
   requireApproval?: boolean
   /** On a declined approval, end the workflow here (`'stop'`, default) or pass a declined result to the next step. */
@@ -73,6 +79,7 @@ const RESUME_SCHEMA = {
  * Async because the step's input schema comes from One's catalog.
  */
 export async function oneStep(options: OneStepOptions) {
+  if (options.connect && !options.userId) throw new Error('[@withone/mastra] `connect` needs a `userId` resolver.')
   const client = new OneClient({
     secret: options.secret ?? process.env.ONE_SECRET ?? '',
     baseUrl: options.baseUrl ?? process.env.ONE_BASE_URL,
@@ -105,15 +112,19 @@ export async function oneStep(options: OneStepOptions) {
         }
       }
 
-      const connectUserId = options.connectUserId?.({ requestContext })
-      const connectionKey = options.connectionKey ?? (await operationalKey(client, options.platform, connectUserId))
-      const res = await client.execute({
+      let backend: Backend = secretBackend(client)
+      if (options.connect) {
+        const userId = options.userId!({ requestContext })
+        if (!userId) throw new Error(`[@withone/mastra] no userId for "${action.title}"`)
+        backend = connectBackend(options.connect, userId)
+      }
+      const connectionKey = options.connectionKey ?? (await usableKey(backend, options.platform))
+      const res = await backend.run({
         action,
         connectionKey,
         pathVariables: inputData?.path,
         query: inputData?.query,
         body: inputData?.body,
-        connectUserId,
       })
       if (!res.ok && failOnError) {
         throw new OneApiError(res.status, JSON.stringify(res.data), `${action.title} failed with ${res.status}: ${JSON.stringify(res.data).slice(0, 500)}`)
@@ -134,9 +145,8 @@ async function findAction(client: OneClient, platform: string, ref: string): Pro
   throw new Error(`[@withone/mastra] no "${platform}" action matches "${ref}". Use a tool id, a One action id, or the exact title.`)
 }
 
-async function operationalKey(client: OneClient, platform: string, connectUserId?: string): Promise<string> {
-  const all: OneConnection[] = await client.listConnections({ platform, connectUserId })
-  const match = all.find((c) => c.state === 'operational' && c.active !== false)
-  if (!match) throw new Error(`[@withone/mastra] no operational "${platform}" connection${connectUserId ? ` for user ${connectUserId}` : ''}`)
+async function usableKey(backend: Backend, platform: string): Promise<string> {
+  const match = (await backend.connections(platform)).find((c) => c.usable)
+  if (!match) throw new Error(`[@withone/mastra] no usable "${platform}" connection (${backend.scope})`)
   return match.key
 }

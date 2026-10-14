@@ -1,13 +1,14 @@
 import { createTool } from '@mastra/core/tools'
 import type { ToolsInput } from '@mastra/core/agent'
 import type { RequestContext } from '@mastra/core/request-context'
-import { OneClient, type OneAction, type OneActionKnowledge, type OneConnection } from './client.js'
+import { OneClient, type OneAction, type OneActionKnowledge } from './client.js'
+import { connectBackend, secretBackend, type Backend, type BackendConnection, type OneConnectLike, type RunResult } from './backend.js'
 import { matchesAny, toolIdFor, uniqueId } from './names.js'
 import { OPEN_INPUT_SCHEMA, toToolInputSchema } from './schema.js'
 import { TtlCache, mapLimit } from './util.js'
 
 export interface PlatformConfig {
-  /** Use this connection instead of the first operational one on the account. */
+  /** Use this connection instead of the first usable one. */
   connectionKey?: string
   /** Only these actions, by One action id (`conn_mod_def::…`) or exact title. */
   actions?: string[]
@@ -26,14 +27,27 @@ export interface ResolveArgs {
 }
 
 export interface OneToolsOptions {
-  /** One secret key. Defaults to `process.env.ONE_SECRET`. */
+  /** Platforms to expose, keyed by One platform slug (`gmail`, `cal-com`, …). `true` = defaults. */
+  platforms: Record<string, true | 'discover' | PlatformConfig>
+  /** One secret key, when tools act for your own One account. Defaults to `process.env.ONE_SECRET`. */
   secret?: string
   /** Defaults to `process.env.ONE_BASE_URL` or `https://api.withone.ai`. */
   baseUrl?: string
-  /** Platforms to expose, keyed by One platform slug (`gmail`, `cal-com`, …). `true` = defaults. */
-  platforms: Record<string, true | 'discover' | PlatformConfig>
-  /** Per-request end user, for One Connect grant keys. Sent as `X-One-Connect-User-Id`. */
-  connectUserId?: (args: ResolveArgs) => string | undefined
+  /**
+   * A One Connect client (`createOneConnect` from `@withone/connect/server`), when tools
+   * act for each of your end users with the access they granted. Requires `userId`.
+   */
+  connect?: OneConnectLike
+  /** Which end user this request is for. Required with `connect`. */
+  userId?: (args: ResolveArgs) => string | undefined
+  /**
+   * Link a user follows to connect a platform the agent needs. With `connect` this is
+   * usually your authorize route (`/api/one/authorize?connector=<platform>`). Defaults
+   * to One's dashboard when using a secret key. Return `undefined` to skip.
+   */
+  connectUrl?: (args: { platform: string; userId?: string }) => string | undefined
+  /** One dashboard origin for the default connect link. Defaults to `process.env.ONE_APP_URL` or `https://app.withone.ai`. */
+  appUrl?: string
   /** Above this many matching actions a platform switches to discover mode. Default 40. */
   maxToolsPerPlatform?: number
   /** Catalog and schema cache lifetime. Default 10 minutes. */
@@ -54,26 +68,26 @@ const KNOWLEDGE_CONCURRENCY = 8
 const DESCRIPTION_LIMIT = 1_200
 
 /**
- * Turns the apps connected to a One account into Mastra tools.
+ * Turns apps connected through One into Mastra tools.
  *
  * ```ts
  * new Agent({ tools: oneTools({ platforms: { gmail: true, slack: true } }), … })
  * ```
  *
- * The result is a resolver Mastra calls per request, so connections added on
- * One appear without a redeploy and `connectUserId` can scope each request to
- * one end user.
+ * The result is a resolver Mastra calls per request: connections added on One
+ * appear without a redeploy, and with `connect` + `userId` each request acts
+ * for one end user. A platform the caller hasn't connected yet becomes a
+ * `connect_<platform>` tool that hands back a link to connect it.
  */
 export function oneTools(options: OneToolsOptions): OneToolsResolver {
-  const secret = options.secret ?? process.env.ONE_SECRET
-  const client = new OneClient({
-    secret: secret ?? '',
-    baseUrl: options.baseUrl ?? process.env.ONE_BASE_URL,
-    fetch: options.fetch,
-  })
+  if (options.connect && !options.userId) throw new Error('[@withone/mastra] `connect` needs a `userId` resolver.')
+  const client = options.connect
+    ? undefined
+    : new OneClient({ secret: options.secret ?? process.env.ONE_SECRET ?? '', baseUrl: options.baseUrl ?? process.env.ONE_BASE_URL, fetch: options.fetch })
+
   const ttl = options.cacheTtlMs ?? DEFAULT_TTL
   const maxTools = options.maxToolsPerPlatform ?? DEFAULT_MAX_TOOLS
-  const maxResult = options.maxResultChars ?? DEFAULT_MAX_RESULT
+  const truncate = truncateFor(options.maxResultChars ?? DEFAULT_MAX_RESULT)
   const report = options.onWarning ?? ((m: string) => console.warn(`[@withone/mastra] ${m}`))
   const warned = new Set<string>()
   const warn = (m: string) => {
@@ -82,36 +96,55 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
     report(m)
   }
 
+  const appUrl = (options.appUrl ?? process.env.ONE_APP_URL ?? 'https://app.withone.ai').replace(/\/+$/, '')
+  const connectUrl =
+    options.connectUrl ??
+    (client ? ({ platform }: { platform: string }) => `${appUrl}/?env=${client.environment}#open=${encodeURIComponent(platform)}` : () => undefined)
+
+  // The catalog and action docs are the same for every caller; connections are per caller.
   const catalogs = new TtlCache<OneAction[]>(ttl)
   const counts = new TtlCache<number>(ttl)
   const knowledge = new TtlCache<OneActionKnowledge>(ttl)
-  const connections = new TtlCache<OneConnection[]>(CONNECTION_TTL)
-
-  const getKnowledge = (id: string) => knowledge.get(id, () => client.getKnowledge(id))
-
-  const truncate = truncateFor(maxResult)
+  const connections = new TtlCache<BackendConnection[]>(CONNECTION_TTL)
 
   return async (args = {}) => {
-    const connectUserId = options.connectUserId?.(args)
-    const scope = { connectUserId }
+    let backend: Backend
+    let userId: string | undefined
+    if (options.connect) {
+      userId = options.userId!(args)
+      if (!userId) {
+        warn('no userId for this request; One tools are disabled for it')
+        return {}
+      }
+      backend = connectBackend(options.connect, userId)
+    } else {
+      backend = secretBackend(client!)
+    }
+    const getKnowledge = (id: string) => knowledge.get(id, () => backend.knowledge(id))
+
     const tools: ToolsInput = {}
     const taken = new Set<string>()
-    const discoverPlatforms: Array<{ platform: string; connectionKey: string; config: PlatformConfig }> = []
+    const discoverPlatforms: DiscoverPlatform[] = []
 
     const entries = Object.entries(options.platforms).map(([platform, raw]) => ({
       platform,
       config: (raw === true ? {} : raw === 'discover' ? { mode: 'discover' } : raw) as PlatformConfig,
     }))
     const platformConnections = await Promise.all(
-      entries.map(({ platform }) =>
-        connections.get(`${connectUserId ?? ''}\u0000${platform}`, () => client.listConnections({ ...scope, platform })),
-      ),
+      entries.map(({ platform }) => connections.get(`${backend.scope}\u0000${platform}`, () => backend.connections(platform))),
     )
 
     for (const [i, { platform, config }] of entries.entries()) {
-      const connection = pickConnection(platformConnections[i] ?? [], platform, config.connectionKey)
+      const connection = pickConnection(platformConnections[i] ?? [], config.connectionKey)
       if (!connection) {
-        warn(`no operational "${platform}" connection${connectUserId ? ` for user ${connectUserId}` : ''}; skipping its tools`)
+        const url = connectUrl({ platform, userId })
+        if (url) {
+          const id = uniqueId(toolIdFor('connect', platform), taken)
+          taken.add(id)
+          tools[id] = connectTool(id, platform, url)
+        } else {
+          warn(`no usable "${platform}" connection${userId ? ` for user ${userId}` : ''}; skipping its tools`)
+        }
         continue
       }
 
@@ -121,7 +154,7 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
       }
 
       if (!hasExplicitSelection(config)) {
-        const total = await counts.get(platform, () => client.countActions(platform))
+        const total = await counts.get(platform, () => backend.countActions(platform))
         if (total > maxTools) {
           warn(`"${platform}" has ${total} actions; exposing search/run tools instead. Narrow with \`actions\` or \`allowTools\` for typed tools.`)
           discoverPlatforms.push({ platform, connectionKey: connection.key, config })
@@ -129,51 +162,49 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
         }
       }
 
-      const catalog = await catalogs.get(platform, () => client.listActions(platform))
+      const catalog = await catalogs.get(platform, () => backend.listActions(platform))
       const selected = selectActions(platform, catalog, config)
-
       if (selected.length > maxTools) {
         warn(`"${platform}" selection matched ${selected.length} actions; keeping the first ${maxTools}.`)
         selected.length = maxTools
       }
 
       const docs = await mapLimit(selected, KNOWLEDGE_CONCURRENCY, (a) => getKnowledge(a.action.systemId).catch(() => undefined))
-
-      selected.forEach(({ action, toolId }, i) => {
+      selected.forEach(({ action, toolId }, j) => {
         const id = uniqueId(toolId, taken)
         taken.add(id)
         tools[id] = actionTool({
-          client,
+          backend,
           id,
           platform,
           action,
-          doc: docs[i],
+          doc: docs[j],
           connectionKey: connection.key,
-          connectUserId,
           requireApproval: needsApproval(config, id),
           truncate,
+          connectUrl: () => connectUrl({ platform, userId }),
         })
       })
     }
 
     if (discoverPlatforms.length) {
-      Object.assign(tools, discoverTools(client, discoverPlatforms, { getKnowledge, connectUserId, truncate }))
+      Object.assign(tools, discoverTools(backend, discoverPlatforms, { getKnowledge, truncate, connectUrl: (platform) => connectUrl({ platform, userId }) }))
     }
     return tools
   }
 }
 
 export interface ActionToolInput {
-  client: OneClient
+  backend: Backend
   id: string
   platform: string
   action: OneAction
   doc?: OneActionKnowledge
   connectionKey: string
-  connectUserId?: string
   requireApproval?: boolean
   description?: string
   truncate?: (output: unknown) => unknown
+  connectUrl?: () => string | undefined
 }
 
 /** One Mastra tool for one One action, bound to one connection. */
@@ -186,15 +217,42 @@ export function actionTool(t: ActionToolInput) {
     requireApproval: t.requireApproval ?? false,
     ...(t.truncate ? { toModelOutput: t.truncate } : {}),
     execute: async (data: any) =>
-      t.client.execute({
-        action: t.action,
-        connectionKey: t.connectionKey,
-        pathVariables: data?.path,
-        query: data?.query,
-        body: data?.body,
-        connectUserId: t.connectUserId,
-      }),
+      withConnectHint(
+        await t.backend.run({
+          action: t.action,
+          connectionKey: t.connectionKey,
+          pathVariables: data?.path,
+          query: data?.query,
+          body: data?.body,
+        }),
+        t.platform,
+        t.connectUrl,
+      ),
   })
+}
+
+/** Stand-in for a platform the caller hasn't connected: hands the agent a link to give the user. */
+function connectTool(id: string, platform: string, url: string) {
+  return createTool({
+    id,
+    description: `The user has not connected ${platform} yet, so its tools are unavailable. Call this to get a link the user can open to connect ${platform}; its tools appear on the next message after they connect.`,
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false } as any,
+    execute: async () => ({
+      connectRequired: true,
+      platform,
+      url,
+      message: `Ask the user to connect ${platform} by opening ${url}, then to send their request again.`,
+    }),
+  })
+}
+
+function withConnectHint(result: RunResult, platform: string, connectUrl?: () => string | undefined): RunResult & { url?: string; message?: string } {
+  if (!result.connectRequired) return result
+  const url = connectUrl?.()
+  return {
+    ...result,
+    ...(url ? { url, message: `The user's access to ${platform} has ended. Ask them to reconnect at ${url}.` } : {}),
+  }
 }
 
 /** Stable tool ids for a platform catalog, in catalog order, with collisions suffixed. */
@@ -217,10 +275,9 @@ export function truncateFor(maxChars: number) {
   }
 }
 
-function pickConnection(all: OneConnection[], platform: string, key?: string): OneConnection | undefined {
-  if (key) return all.find((c) => c.key === key)
-  const candidates = all.filter((c) => c.platform === platform && c.active !== false)
-  return candidates.find((c) => c.state === 'operational') ?? candidates.find((c) => !c.state)
+function pickConnection(all: BackendConnection[], key?: string): BackendConnection | undefined {
+  if (key) return all.find((c) => c.key === key && c.usable)
+  return all.find((c) => c.usable)
 }
 
 interface Selected {
@@ -230,9 +287,9 @@ interface Selected {
 
 function selectActions(platform: string, catalog: OneAction[], config: PlatformConfig): Selected[] {
   const wanted = config.actions?.map((a) => a.toLowerCase())
-  return catalog
-    .filter((a) => !wanted || wanted.includes(a.systemId.toLowerCase()) || wanted.includes(a.title.toLowerCase()))
-    .map((action) => ({ action, toolId: toolIdFor(platform, action.title) }))
+  return [...catalogToolIds(platform, catalog)]
+    .map(([toolId, action]) => ({ action, toolId }))
+    .filter(({ action }) => !wanted || wanted.includes(action.systemId.toLowerCase()) || wanted.includes(action.title.toLowerCase()))
     .filter(({ toolId }) => !config.allowTools?.length || matchesAny(toolId, config.allowTools))
     .filter(({ toolId }) => !matchesAny(toolId, config.disallowTools))
 }
@@ -261,22 +318,30 @@ function section(markdown: string | undefined, heading: string): string | undefi
   return match?.[1]?.trim().replace(/\s+/g, ' ')
 }
 
+interface DiscoverPlatform {
+  platform: string
+  connectionKey: string
+  config: PlatformConfig
+}
+
 function discoverTools(
-  client: OneClient,
-  platforms: Array<{ platform: string; connectionKey: string; config: PlatformConfig }>,
+  backend: Backend,
+  platforms: DiscoverPlatform[],
   ctx: {
     getKnowledge: (id: string) => Promise<OneActionKnowledge>
-    connectUserId?: string
     truncate: (output: unknown) => unknown
+    connectUrl: (platform: string) => string | undefined
   },
 ): ToolsInput {
   const byPlatform = new Map(platforms.map((p) => [p.platform, p]))
   const names = [...byPlatform.keys()]
-  const platformSchema = { type: 'string', enum: names, description: 'One platform slug.' }
 
-  const actionPlatform = async (actionId: string) => {
+  // An action may only run on a platform this agent enabled, whatever id the model passes.
+  const resolveAction = async (actionId: string) => {
     const doc = await ctx.getKnowledge(actionId)
-    return { doc, platform: (doc as { connectionPlatform?: string }).connectionPlatform }
+    const platform = (doc as { connectionPlatform?: string; platform?: string }).connectionPlatform ?? (doc as { platform?: string }).platform
+    const entry = platform ? byPlatform.get(platform) : undefined
+    return { doc, entry, toolId: entry ? toolIdFor(entry.platform, doc.title) : undefined }
   }
 
   return {
@@ -286,14 +351,14 @@ function discoverTools(
       inputSchema: {
         type: 'object',
         properties: {
-          platform: platformSchema,
+          platform: { type: 'string', enum: names, description: 'One platform slug.' },
           query: { type: 'string', description: 'What you want to do, e.g. "list open issues".' },
         },
         required: ['platform', 'query'],
         additionalProperties: false,
       } as any,
       execute: async ({ platform, query }: any) => {
-        const found = await client.searchActions(platform, query, 8)
+        const found = await backend.searchActions(platform, query, 8)
         return found.map((a) => ({ actionId: a.systemId, title: a.title, method: a.method, path: a.path }))
       },
     }),
@@ -308,14 +373,13 @@ function discoverTools(
       } as any,
       toModelOutput: ctx.truncate,
       execute: async ({ actionId }: any) => {
-        const { doc, platform } = await actionPlatform(actionId)
-        if (!platform || !byPlatform.has(platform)) return { error: `Action ${actionId} is not on an enabled platform.` }
-        const input = toToolInputSchema(doc.ioSchema?.inputSchema)
+        const { doc, entry } = await resolveAction(actionId)
+        if (!entry) return { error: `Action ${actionId} is not on an enabled platform.` }
         return {
           title: doc.title,
           method: doc.method,
           path: doc.path,
-          inputSchema: input?.schema ?? null,
+          inputSchema: toToolInputSchema(doc.ioSchema?.inputSchema)?.schema ?? null,
           knowledge: doc.knowledge,
         }
       },
@@ -335,28 +399,23 @@ function discoverTools(
         additionalProperties: false,
       } as any,
       requireApproval: async (input: any) => {
-        const { doc, platform } = await actionPlatform(input.actionId)
-        const entry = platform ? byPlatform.get(platform) : undefined
-        return entry ? needsApproval(entry.config, toolIdFor(entry.platform, doc.title)) : false
+        const { entry, toolId } = await resolveAction(input.actionId)
+        return entry && toolId ? needsApproval(entry.config, toolId) : false
       },
       toModelOutput: ctx.truncate,
       execute: async ({ actionId, path, query, body }: any) => {
-        const { doc, platform } = await actionPlatform(actionId)
-        const entry = platform ? byPlatform.get(platform) : undefined
-        if (!entry) return { error: `Action ${actionId} is not on an enabled platform.` }
-        const toolId = toolIdFor(entry.platform, doc.title)
-        if (entry.config.allowTools?.length && !matchesAny(toolId, entry.config.allowTools)) {
-          return { error: `Action "${doc.title}" is not allowed.` }
-        }
+        const { doc, entry, toolId } = await resolveAction(actionId)
+        if (!entry || !toolId) return { error: `Action ${actionId} is not on an enabled platform.` }
+        if (entry.config.allowTools?.length && !matchesAny(toolId, entry.config.allowTools)) return { error: `Action "${doc.title}" is not allowed.` }
         if (matchesAny(toolId, entry.config.disallowTools)) return { error: `Action "${doc.title}" is not allowed.` }
-        return client.execute({
+        const result = await backend.run({
           action: { systemId: doc._id, method: doc.method, path: doc.path, tags: doc.tags },
           connectionKey: entry.connectionKey,
           pathVariables: path,
           query,
           body,
-          connectUserId: ctx.connectUserId,
         })
+        return withConnectHint(result, entry.platform, () => ctx.connectUrl(entry.platform))
       },
     }),
   }

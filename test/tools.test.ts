@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { RequestContext } from '@mastra/core/request-context'
 import { oneTools } from '../src/tools.js'
 
 interface Call {
@@ -105,19 +104,23 @@ describe('oneTools', () => {
     expect(ran.ok).toBe(true)
   })
 
-  it('skips platforms with no connection and sends the connect user id', async () => {
+  it('turns a platform with no connection into a connect tool that links to One', async () => {
+    const { fetchImpl } = fakeOne()
+    const tools = (await oneTools({ secret: 'sk_test_x', fetch: fetchImpl, appUrl: 'https://app.test', platforms: { slack: true }, onWarning: quiet })()) as any
+    expect(Object.keys(tools)).toEqual(['connect_slack'])
+    expect(await tools.connect_slack.execute({}, {})).toMatchObject({
+      connectRequired: true,
+      platform: 'slack',
+      url: 'https://app.test/?env=test#open=slack',
+    })
+  })
+
+  it('skips a platform with no connection when no connect link is available', async () => {
     const warnings: string[] = []
-    const { calls, fetchImpl } = fakeOne()
-    const tools = await oneTools({
-      secret: 'sk_test',
-      fetch: fetchImpl,
-      platforms: { slack: true },
-      connectUserId: ({ requestContext }) => requestContext?.get('userId') as string,
-      onWarning: (w) => warnings.push(w),
-    })({ requestContext: new RequestContext([['userId', 'cu_123']]) })
+    const { fetchImpl } = fakeOne()
+    const tools = await oneTools({ secret: 'sk_test', fetch: fetchImpl, platforms: { slack: true }, connectUrl: () => undefined, onWarning: (w) => warnings.push(w) })()
     expect(tools).toEqual({})
-    expect(warnings[0]).toMatch(/no operational "slack" connection for user cu_123/)
-    expect((calls[0]!.init!.headers as Record<string, string>)['x-one-connect-user-id']).toBe('cu_123')
+    expect(warnings[0]).toMatch(/no usable "slack" connection/)
   })
 
   it('truncates oversized results for the model', async () => {

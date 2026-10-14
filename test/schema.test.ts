@@ -84,6 +84,7 @@ describe('names', () => {
   it('builds stable snake_case tool ids', () => {
     expect(toolIdFor('cal-com', 'Get an Event Type by ID')).toBe('cal_com_get_an_event_type_by_id')
     expect(toolIdFor('gmail', 'Send Email (with attachments)')).toBe('gmail_send_email_with_attachments')
+    expect(toolIdFor('1-password', "List an Item's Files")).toBe('1_password_list_an_items_files')
     expect(toolIdFor('x', 'a'.repeat(100)).length).toBeLessThanOrEqual(64)
   })
 

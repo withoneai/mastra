@@ -5,6 +5,7 @@ export function toolIdFor(platform: string, title: string): string {
   const slug = (s: string) =>
     s
       .normalize('NFKD')
+      .replace(/['’]/g, '')
       .replace(/[^\w\s-]/g, ' ')
       .trim()
       .replace(/[\s-]+/g, '_')

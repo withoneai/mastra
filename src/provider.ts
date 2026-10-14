@@ -17,6 +17,7 @@ import type { ToolAction } from '@mastra/core/tools'
 import { OneClient, type OneAction, type OneConnection, type OneConnector } from './client.js'
 import { matchesAny } from './names.js'
 import { actionTool, catalogToolIds, truncateFor } from './tools.js'
+import { secretBackend, type Backend } from './backend.js'
 import { TtlCache, mapLimit } from './util.js'
 
 export interface OneToolProviderOptions extends BaseToolProviderOptions {
@@ -71,6 +72,7 @@ export class OneToolProvider extends BaseToolProvider {
   }
 
   private readonly client: OneClient
+  private readonly backend: Backend
   private readonly appUrl: string
   private readonly approvals: string[]
   private readonly truncate: (output: unknown) => unknown
@@ -85,6 +87,7 @@ export class OneToolProvider extends BaseToolProvider {
       baseUrl: options.baseUrl ?? process.env.ONE_BASE_URL,
       fetch: options.fetch,
     })
+    this.backend = secretBackend(this.client)
     this.appUrl = (options.appUrl ?? process.env.ONE_APP_URL ?? 'https://app.withone.ai').replace(/\/+$/, '')
     this.approvals = options.requireApproval ?? []
     this.truncate = truncateFor(options.maxResultChars ?? 30_000)
@@ -245,7 +248,7 @@ export class OneToolProvider extends BaseToolProvider {
     const out: Record<string, ToolAction<any, any, any>> = {}
     wanted.forEach(({ slug, action }, i) => {
       out[slug] = actionTool({
-        client: this.client,
+        backend: this.backend,
         id: slug,
         platform,
         action,
