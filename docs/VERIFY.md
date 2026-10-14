@@ -169,7 +169,7 @@ To try **Connect** in the editor, pick an app you haven't connected. Studio open
 
 ## 6. Chat with the agent (needs a model key)
 
-Add `ANTHROPIC_API_KEY=…` to `my-agent/.env` and restart `npm run dev`. In Studio, open **One agent** and ask:
+Add `ANTHROPIC_API_KEY=…` to `my-agent/.env` and restart `npm run dev`. To use OpenAI instead, add `OPENAI_API_KEY=…` and `MODEL=openai/gpt-5.5`; the One agent reads its model from `MODEL`. In Studio, open **One agent** and ask:
 
 > What are the three most recent issues in Linear?
 
