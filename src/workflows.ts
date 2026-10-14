@@ -1,8 +1,17 @@
 import { createStep } from '@mastra/core/workflows'
 import type { RequestContext } from '@mastra/core/request-context'
-import { OneApiError, OneClient, type OneAction } from './client.js'
+import { DEFAULT_BASE_URL, OneApiError, OneClient, type OneAction } from './client.js'
 import { OPEN_INPUT_SCHEMA, toToolInputSchema } from './schema.js'
-import { connectBackend, secretBackend, type Backend, type OneConnectLike } from './backend.js'
+import {
+  connectBackend,
+  connectKeyBackend,
+  isConnectKey,
+  parseUserReference,
+  secretBackend,
+  type Backend,
+  type OneConnectKey,
+  type OneConnectLike,
+} from './backend.js'
 import { catalogToolIds, describe } from './tools.js'
 
 export interface OneStepOptions {
@@ -15,10 +24,10 @@ export interface OneStepOptions {
   /** Use this connection instead of the first operational one. */
   connectionKey?: string
   /**
-   * A One Connect client, to run the action for an end user with the access they granted.
-   * The step's schema still comes from the catalog, read with `secret` (your One key or the app's connect key).
+   * One Connect, to run the action for an end user with the access they granted: `{ connectKey, loadUser }`
+   * or a `createOneConnect` client. The step's schema still comes from the catalog, read with `secret`.
    */
-  connect?: OneConnectLike
+  connect?: OneConnectKey | OneConnectLike
   /** Which end user this run is for. Required with `connect`. */
   userId?: (args: { requestContext: RequestContext<any> }) => string | undefined
   /** Suspend before running until resumed with `{ approved: true }`. */
@@ -116,7 +125,17 @@ export async function oneStep(options: OneStepOptions) {
       if (options.connect) {
         const userId = options.userId!({ requestContext })
         if (!userId) throw new Error(`[@withone/mastra] no userId for "${action.title}"`)
-        backend = connectBackend(options.connect, userId)
+        if (isConnectKey(options.connect)) {
+          const reference = await options.connect.loadUser(userId)
+          const connectClient = new OneClient({
+            secret: options.connect.connectKey,
+            baseUrl: options.connect.baseUrl ?? DEFAULT_BASE_URL,
+            fetch: options.fetch,
+          })
+          backend = connectKeyBackend(connectClient, reference ? parseUserReference(reference) : null, userId)
+        } else {
+          backend = connectBackend(options.connect, userId)
+        }
       }
       const connectionKey = options.connectionKey ?? (await usableKey(backend, options.platform))
       const res = await backend.run({
