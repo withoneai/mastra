@@ -29,8 +29,12 @@ export interface PlatformConfig {
   disallowTools?: string[]
   /** `true` for every tool on this platform, `'writes'` for actions that change data, or tool-id globs. */
   requireApproval?: ApprovalRule
-  /** Expose search + run tools instead of one tool per action. Default: automatic when the selection is too large. */
-  mode?: 'typed' | 'discover'
+  /**
+   * `typed`: one tool per action (default, up to `maxToolsPerPlatform`). `discover`: search + run tools.
+   * `all`: one typed tool for every action, with no cap; pair it with Mastra's `ToolSearchProcessor`
+   * so the model loads only the tools a task needs. Default: `typed`, or `discover` when the platform is too large.
+   */
+  mode?: 'typed' | 'discover' | 'all'
 }
 
 export interface ResolveArgs {
@@ -39,7 +43,7 @@ export interface ResolveArgs {
 
 export interface OneToolsOptions {
   /** Platforms to expose, keyed by One platform slug (`gmail`, `cal-com`, …). `true` = defaults. */
-  platforms: Record<string, true | 'discover' | PlatformConfig>
+  platforms: Record<string, true | 'discover' | 'all' | PlatformConfig>
   /** One secret key, when tools act for your own One account. Defaults to `process.env.ONE_SECRET`. */
   secret?: string
   /** Defaults to `process.env.ONE_BASE_URL` or `https://api.withone.ai`. */
@@ -121,6 +125,7 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
   const catalogs = new TtlCache<OneAction[]>(ttl)
   const counts = new TtlCache<number>(ttl)
   const knowledge = new TtlCache<OneActionKnowledge>(ttl)
+  const platformDocs = new TtlCache<OneActionKnowledge[]>(ttl)
   const connections = new TtlCache<BackendConnection[]>(CONNECTION_TTL)
 
   return async (args = {}) => {
@@ -149,7 +154,7 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
 
     const entries = Object.entries(options.platforms).map(([platform, raw]) => ({
       platform,
-      config: (raw === true ? {} : raw === 'discover' ? { mode: 'discover' } : raw) as PlatformConfig,
+      config: (raw === true ? {} : raw === 'discover' || raw === 'all' ? { mode: raw } : raw) as PlatformConfig,
     }))
     const platformConnections = await Promise.all(
       entries.map(({ platform }) => connections.get(`${backend.scope}\u0000${platform}`, () => backend.connections(platform))),
@@ -174,7 +179,8 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
         continue
       }
 
-      if (!hasExplicitSelection(config)) {
+      const all = config.mode === 'all'
+      if (!all && !hasExplicitSelection(config)) {
         const total = await counts.get(platform, () => backend.countActions(platform))
         if (total > maxTools) {
           warn(`"${platform}" has ${total} actions; exposing search/run tools instead. Narrow with \`actions\` or \`allowTools\` for typed tools.`)
@@ -185,12 +191,15 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
 
       const catalog = await catalogs.get(platform, () => backend.listActions(platform))
       const selected = selectActions(platform, catalog, config)
-      if (selected.length > maxTools) {
+      if (!all && selected.length > maxTools) {
         warn(`"${platform}" selection matched ${selected.length} actions; keeping the first ${maxTools}.`)
         selected.length = maxTools
       }
 
-      const docs = await mapLimit(selected, KNOWLEDGE_CONCURRENCY, (a) => getKnowledge(a.action.systemId).catch(() => undefined))
+      // A whole platform's schemas come in a few pages rather than one request per action.
+      const bulk = all && backend.knowledgeAll ? await platformDocs.get(`${backend.scope}\u0000${platform}`, () => backend.knowledgeAll!(platform)).catch(() => undefined) : undefined
+      const byId = new Map(bulk?.map((d) => [d._id, d]))
+      const docs = await mapLimit(selected, KNOWLEDGE_CONCURRENCY, async (a) => byId.get(a.action.systemId) ?? getKnowledge(a.action.systemId).catch(() => undefined))
       selected.forEach(({ action, toolId }, j) => {
         const id = uniqueId(toolId, taken)
         taken.add(id)

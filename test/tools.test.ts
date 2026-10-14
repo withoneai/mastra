@@ -43,6 +43,9 @@ function fakeOne(opts: { actions?: number; findFails?: boolean } = {}) {
       return json([{ platform, intent, confidence: 0.92, selected: [{ ...actions[0], knowledge: '# Get Event Type\n\nPass the id in the path.' }], alternatives: [actions[1]] }])
     }
     if (url.pathname.startsWith('/v1/available-actions/')) return json({ rows: actions, pages: 1, total: actions.length })
+    if (url.pathname === '/v1/knowledge' && url.searchParams.get('connectionPlatform')) {
+      return json({ rows: actions.map((a) => knowledge[a.systemId] ?? { _id: a.systemId, title: a.title, method: a.method, path: a.path, tags: a.tags }), pages: 1 })
+    }
     if (url.pathname === '/v1/knowledge') {
       const row = knowledge[url.searchParams.get('_id')!]
       return row ? json({ rows: [row] }) : json({ rows: [] })
@@ -115,6 +118,41 @@ describe('oneTools', () => {
     const tools = (await oneTools({ secret: 'sk_test', fetch: fetchImpl, platforms: { 'cal-com': true }, onWarning: quiet })()) as any
     const found = await tools.one_find_actions.execute({ platform: 'cal-com', query: 'event' }, {})
     expect(found[0]).toEqual({ actionId: 'conn_mod_def::get', title: 'Get Event Type', method: 'GET', path: '/event-types/{{id}}' })
+  })
+
+  it("'all' makes every action a typed tool, and ToolSearchProcessor keeps them out of the prompt", async () => {
+    const { fetchImpl, calls } = fakeOne({ actions: 60 })
+    const resolve = oneTools({ secret: 'sk_test', fetch: fetchImpl, platforms: { 'cal-com': 'all' }, onWarning: quiet })
+    const tools = (await resolve()) as any
+    expect(Object.keys(tools)).toHaveLength(60)
+    expect(calls.filter((c) => c.url.pathname === '/v1/knowledge' && c.url.searchParams.get('connectionPlatform'))).toHaveLength(1)
+
+    const offered: string[][] = []
+    const usage = { inputTokens: 1, outputTokens: 1, totalTokens: 2 }
+    const model = {
+      specificationVersion: 'v2', provider: 'fake', modelId: 'fake', supportedUrls: {},
+      async doGenerate() { throw new Error('stream only') },
+      async doStream(opts: any) {
+        offered.push((opts.tools ?? []).map((t: any) => t.name))
+        return {
+          stream: new ReadableStream({
+            start(c) {
+              for (const p of [{ type: 'stream-start', warnings: [] }, { type: 'text-start', id: 't' }, { type: 'text-delta', id: 't', delta: 'ok' }, { type: 'text-end', id: 't' }, { type: 'finish', finishReason: 'stop', usage }]) c.enqueue(p)
+              c.close()
+            },
+          }),
+        }
+      },
+    }
+    const { Agent } = await import('@mastra/core/agent')
+    const { ToolSearchProcessor } = await import('@mastra/core/processors')
+    const agent = new Agent({
+      id: 'a', name: 'a', instructions: 'x', model: model as any, tools: resolve,
+      inputProcessors: [new ToolSearchProcessor({ tools: {}, includeResolvedTools: true })],
+    })
+    await (await agent.stream('hi')).text
+    expect(offered[0]).not.toContain('cal_com_get_event_type')
+    expect(offered[0]!.length).toBeLessThan(5)
   })
 
   it('turns a platform with no connection into a connect tool that links to One', async () => {

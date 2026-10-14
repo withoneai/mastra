@@ -35,6 +35,8 @@ export interface Backend {
   /** One's action selector (picks the action and returns its docs). Absent for One Connect, which only has search. */
   find?(platform: string, intent: string): Promise<FoundActions | undefined>
   knowledge(actionId: string): Promise<OneActionKnowledge>
+  /** Every action of a platform with its schema, in a few pages. Optional. */
+  knowledgeAll?(platform: string): Promise<OneActionKnowledge[]>
   run(input: RunInput): Promise<RunResult>
 }
 
@@ -53,6 +55,7 @@ export function secretBackend(client: OneClient): Backend {
     searchActions: (platform, query, limit) => client.searchActions(platform, query, limit),
     find: async (platform, intent) => (await client.findActions([{ platform, intent }]))[0],
     knowledge: (id) => client.getKnowledge(id),
+    knowledgeAll: (platform) => client.listKnowledge(platform),
     run: (input) => client.execute(input),
   }
 }
@@ -211,6 +214,7 @@ export function connectKeyBackend(client: OneClient, scope: RequestScope | null,
     listActions: async (platform) => (await client.listKnowledge(platform, scope ?? undefined)).map(toAction),
     searchActions: async (platform, query, limit) => (await client.searchActions(platform, query, limit, scope ?? undefined)).map(toAction),
     knowledge: (id) => client.getKnowledge(id, scope ?? undefined),
+    knowledgeAll: (platform) => client.listKnowledge(platform, scope ?? undefined),
     run: async (input) => {
       if (!scope) return { ok: false, status: 401, data: null, connectRequired: true }
       const res = await client.execute({ ...input, ...scope })
