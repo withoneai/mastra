@@ -20,7 +20,8 @@ console.log(`cached resolve: ${Date.now() - again} ms`)
 
 const typed = Object.keys(tools).find((id) => id.startsWith('cal_com_'))
 if (typed) {
-  console.log(`\n${typed} schema:`, JSON.stringify(tools[typed].inputSchema).slice(0, 400))
+  const schema = tools[typed].inputSchema?.['~standard']?.jsonSchema?.input?.({ target: 'draft-07' })
+  console.log(`\n${typed} input schema:`, JSON.stringify(schema).slice(0, 400))
   const res = await tools[typed].execute({}, {})
   console.log(`${typed} →`, res.status, JSON.stringify(res.data).slice(0, 300))
 }
