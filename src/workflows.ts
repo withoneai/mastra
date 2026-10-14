@@ -1,4 +1,4 @@
-import { createStep } from '@mastra/core/workflows'
+import { createStep, type Step } from '@mastra/core/workflows'
 import type { RequestContext } from '@mastra/core/request-context'
 import { DEFAULT_BASE_URL, OneApiError, OneClient, type OneAction } from './client.js'
 import { OPEN_INPUT_SCHEMA, toToolInputSchema } from './schema.js'
@@ -87,7 +87,10 @@ const RESUME_SCHEMA = {
  *
  * Async because the step's input schema comes from One's catalog.
  */
-export async function oneStep(options: OneStepOptions) {
+/** The step `oneStep` returns: any input, a typed `{ ok, status, data }` result. */
+export type OneStep = Step<string, unknown, any, OneStepOutput, any, any>
+
+export async function oneStep(options: OneStepOptions): Promise<OneStep> {
   if (options.connect && !options.userId) throw new Error('[@withone/mastra] `connect` needs a `userId` resolver.')
   const client = new OneClient({
     secret: options.secret ?? process.env.ONE_SECRET ?? '',
@@ -154,7 +157,7 @@ export async function oneStep(options: OneStepOptions) {
       }
       return res
     },
-  })
+  }) as unknown as OneStep
 }
 
 async function findAction(client: OneClient, platform: string, ref: string): Promise<{ toolId: string; action: OneAction }> {

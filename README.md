@@ -140,7 +140,7 @@ oneTools({
     connectKey: process.env.ONE_CONNECT_KEY!,
     loadUser: (userId) => userStore.loadUser(userId),
   },
-  userId: ({ requestContext }) => requestContext.get('userId'),
+  userId: ({ requestContext }) => requestContext?.get('userId'),
   connectUrl: ({ platform }) => `/api/one/authorize#one_connector=${platform}`,
   platforms: { gmail: 'discover', linear: 'discover' },
 })
@@ -169,12 +169,15 @@ const notify = await oneStep({ platform: 'slack', action: 'Send Message' })
 
 export const refundFlow = createWorkflow({ id: 'refund', inputSchema, outputSchema })
   .then(refund)
-  .map(async ({ getStepResult }) => ({ body: { channel: '#finance', text: `Refunded ${getStepResult(refund).data.id}` } }))
+  .map(async ({ getStepResult }) => ({
+    body: { channel: '#finance', text: `Refunded ${(getStepResult(refund).data as { id: string }).id}` },
+  }))
   .then(notify)
   .commit()
 ```
 
 - `action` is a tool id, a One action id, or the action's exact title.
+- The step returns `{ ok, status, data }`, where `data` is the app's response.
 - `requireApproval: true` suspends the run until `run.resume({ step: refund, resumeData: { approved: true } })`. A declined approval ends the workflow, unless you pass `onDecline: 'continue'`.
 - A non-2xx response fails the step, unless you pass `failOnError: false`.
 

@@ -44,7 +44,7 @@ export const agent = new Agent({
 // Users connect via @withone/connect's routes; its userStore saves one reference per user.
 oneTools({
   connect: { connectKey: process.env.ONE_CONNECT_KEY!, loadUser: (id) => userStore.loadUser(id) },
-  userId: ({ requestContext }) => requestContext.get('userId'),
+  userId: ({ requestContext }) => requestContext?.get('userId'),
   connectUrl: ({ platform }) => `/api/one/authorize#one_connector=${platform}`,
   platforms: { gmail: true },
 })
