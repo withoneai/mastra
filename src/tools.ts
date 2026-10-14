@@ -267,11 +267,16 @@ export function catalogToolIds(platform: string, catalog: OneAction[]): Map<stri
   return out
 }
 
+/** A `toModelOutput` that caps the result's size. It must return an AI SDK tool-result part, not the raw value. */
 export function truncateFor(maxChars: number) {
-  return (output: unknown) => {
+  return (output: unknown): { type: 'text'; value: string } | { type: 'json'; value: unknown } => {
     const text = typeof output === 'string' ? output : JSON.stringify(output)
-    if (text === undefined || text.length <= maxChars) return output
-    return `${text.slice(0, maxChars)}\n…[truncated ${text.length - maxChars} characters; narrow the request with filters or pagination]`
+    if (text === undefined) return { type: 'json', value: null }
+    if (text.length <= maxChars) return typeof output === 'string' ? { type: 'text', value: output } : { type: 'json', value: output }
+    return {
+      type: 'text',
+      value: `${text.slice(0, maxChars)}\n…[truncated ${text.length - maxChars} characters; narrow the request with filters or pagination]`,
+    }
   }
 }
 

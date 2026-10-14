@@ -127,6 +127,53 @@ describe('oneTools', () => {
     const { fetchImpl } = fakeOne()
     const tools = (await oneTools({ secret: 'sk_test', fetch: fetchImpl, platforms: { 'cal-com': true }, maxResultChars: 10, onWarning: quiet })()) as any
     const out = tools.cal_com_get_event_type.toModelOutput({ a: 'x'.repeat(50) })
-    expect(out).toMatch(/truncated/)
+    expect(out).toMatchObject({ type: 'text', value: expect.stringMatching(/truncated/) })
+    expect(tools.cal_com_get_event_type.toModelOutput([1])).toEqual({ type: 'json', value: [1] })
+    expect(tools.cal_com_get_event_type.toModelOutput('ok')).toEqual({ type: 'text', value: 'ok' })
+  })
+
+  it('hands tool results back to the model as typed tool-result parts in a real agent loop', async () => {
+    const { fetchImpl } = fakeOne({ actions: 50 })
+    const prompts: any[] = []
+    const stream = (parts: any[]) =>
+      new ReadableStream({ start(c) { for (const p of parts) c.enqueue(p); c.close() } })
+    const usage = { inputTokens: 1, outputTokens: 1, totalTokens: 2 }
+    const model = {
+      specificationVersion: 'v2', provider: 'fake', modelId: 'fake', supportedUrls: {},
+      async doGenerate() { throw new Error('stream only') },
+      async doStream(opts: any) {
+        prompts.push(opts.prompt)
+        const step = prompts.length
+        const call = (id: string, toolName: string, input: unknown) => ({ type: 'tool-call', toolCallId: id, toolName, input: JSON.stringify(input) })
+        const parts =
+          step === 1
+            ? [call('c1', 'one_find_actions', { platform: 'cal-com', query: 'event' })]
+            : step === 2
+              ? [call('c2', 'one_get_action', { actionId: 'conn_mod_def::get' })]
+              : [{ type: 'text-start', id: 't' }, { type: 'text-delta', id: 't', delta: 'done' }, { type: 'text-end', id: 't' }]
+        return {
+          stream: stream([
+            { type: 'stream-start', warnings: [] },
+            ...parts,
+            { type: 'finish', finishReason: step < 3 ? 'tool-calls' : 'stop', usage },
+          ]),
+        }
+      },
+    }
+    const { Agent } = await import('@mastra/core/agent')
+    const agent = new Agent({
+      id: 'a', name: 'a', instructions: 'x', model: model as any,
+      tools: oneTools({ secret: 'sk_test', fetch: fetchImpl, platforms: { 'cal-com': true }, onWarning: quiet }),
+    })
+    const res = await agent.stream('find event actions')
+    expect(await res.text).toBe('done')
+    // Every tool result in every later prompt must be a typed part; OpenAI rejects an untyped one
+    // ("Missing required parameter: 'input[n].output'").
+    const results = prompts.slice(1).flatMap((prompt) =>
+      prompt.flatMap((m: any) => (m.role === 'tool' ? m.content : [])).filter((p: any) => p.type === 'tool-result'),
+    )
+    expect(results).toHaveLength(3)
+    for (const r of results) expect(['json', 'text']).toContain(r.output?.type)
+    expect(results.at(-1).output.value).toMatchObject({ title: 'Get Event Type' })
   })
 })
