@@ -10,4 +10,5 @@ export type {
   ExecuteResult,
 } from './client.js'
 export { toToolInputSchema } from './schema.js'
-export { toolIdFor } from './names.js'
+export { isWriteAction, toolIdFor } from './names.js'
+export type { ApprovalRule } from './names.js'

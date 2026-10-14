@@ -3,7 +3,7 @@ import type { ToolsInput } from '@mastra/core/agent'
 import type { RequestContext } from '@mastra/core/request-context'
 import { DEFAULT_BASE_URL, OneClient, resolveAppUrl, type OneAction, type OneActionKnowledge } from './client.js'
 import { connectBackend, secretBackend, type Backend, type BackendConnection, type OneConnectLike, type RunResult } from './backend.js'
-import { matchesAny, toolIdFor, uniqueId } from './names.js'
+import { approvalNeeded, matchesAny, toolIdFor, uniqueId, type ApprovalRule } from './names.js'
 import { OPEN_INPUT_SCHEMA, toToolInputSchema } from './schema.js'
 import { TtlCache, mapLimit } from './util.js'
 
@@ -16,8 +16,8 @@ export interface PlatformConfig {
   allowTools?: string[]
   /** Tool-id globs to drop. Applied after `allowTools`. */
   disallowTools?: string[]
-  /** `true` for every tool on this platform, or tool-id globs. */
-  requireApproval?: boolean | string[]
+  /** `true` for every tool on this platform, `'writes'` for actions that change data, or tool-id globs. */
+  requireApproval?: ApprovalRule
   /** Expose search + run tools instead of one tool per action. Default: automatic when the selection is too large. */
   mode?: 'typed' | 'discover'
 }
@@ -180,7 +180,7 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
           action,
           doc: docs[j],
           connectionKey: connection.key,
-          requireApproval: needsApproval(config, id),
+          requireApproval: approvalNeeded(config.requireApproval, id, action),
           truncate,
           connectUrl: () => connectUrl({ platform, userId }),
         })
@@ -310,11 +310,6 @@ function hasExplicitSelection(config: PlatformConfig): boolean {
   return Boolean(config.actions?.length || config.allowTools?.length)
 }
 
-function needsApproval(config: PlatformConfig, toolId: string): boolean {
-  if (config.requireApproval === true) return true
-  return Array.isArray(config.requireApproval) && matchesAny(toolId, config.requireApproval)
-}
-
 export function describe(platform: string, action: OneAction, doc?: OneActionKnowledge): string {
   const summary =
     (typeof doc?.ioSchema?.inputSchema?.description === 'string' && doc.ioSchema.inputSchema.description) ||
@@ -420,8 +415,8 @@ function discoverTools(
         additionalProperties: false,
       } as any,
       requireApproval: async (input: any) => {
-        const { entry, toolId } = await resolveAction(input.actionId)
-        return entry && toolId ? needsApproval(entry.config, toolId) : false
+        const { doc, entry, toolId } = await resolveAction(input.actionId)
+        return entry && toolId ? approvalNeeded(entry.config.requireApproval, toolId, doc) : false
       },
       toModelOutput: ctx.truncate,
       execute: async ({ actionId, path, query, body }: any) => {

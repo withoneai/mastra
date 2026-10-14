@@ -15,7 +15,7 @@ import type {
 } from '@mastra/core/tool-provider'
 import type { ToolAction } from '@mastra/core/tools'
 import { OneClient, resolveAppUrl, type OneAction, type OneConnection, type OneConnector } from './client.js'
-import { matchesAny } from './names.js'
+import { approvalNeeded } from './names.js'
 import { actionTool, catalogToolIds, truncateFor } from './tools.js'
 import { secretBackend, type Backend } from './backend.js'
 import { TtlCache, mapLimit } from './util.js'
@@ -27,8 +27,8 @@ export interface OneToolProviderOptions extends BaseToolProviderOptions {
   baseUrl?: string
   /** One dashboard origin for the Connect flow. Defaults to `ONE_APP_URL`, else the dashboard paired with the API. */
   appUrl?: string
-  /** Tool-id globs that require approval before running. */
-  requireApproval?: string[]
+  /** Tool-id globs that require approval before running, or `'writes'` for every action that changes data. */
+  requireApproval?: string[] | 'writes'
   cacheTtlMs?: number
   maxResultChars?: number
   fetch?: typeof fetch
@@ -75,7 +75,7 @@ export class OneToolProvider extends BaseToolProvider {
   private readonly client: OneClient
   private readonly backend: Backend
   private readonly appUrl: string
-  private readonly approvals: string[]
+  private readonly approvals: string[] | 'writes'
   private readonly truncate: (output: unknown) => unknown
   private readonly catalogs: TtlCache<OneAction[]>
   private readonly connectors: TtlCache<OneConnector[]>
@@ -293,7 +293,7 @@ export class OneToolProvider extends BaseToolProvider {
         doc: docs[i],
         connectionKey: opts.connectionKey,
         description: opts.descriptions?.[slug],
-        requireApproval: matchesAny(slug, this.approvals),
+        requireApproval: approvalNeeded(this.approvals, slug, action),
         truncate: this.truncate,
       }) as ToolAction<any, any, any>
     })

@@ -46,9 +46,9 @@ export const opsAgent = new Agent({
 ```
 
 - **Typed tools.** Each action becomes a tool such as `cal_com_get_event_types`, with an input schema (`{ path?, query?, body? }`) from One's action catalog. Headers and connection keys are stripped, so the model never sees credentials. Mastra validates inputs before anything is sent.
-- **Discover mode.** A platform with more than `maxToolsPerPlatform` (default 40) actions and no `actions`/`allowTools` filter gets `one_find_actions`, `one_get_action` and `one_run_action` instead. These are restricted to the platforms you enabled.
+- **Discover mode.** A platform with more than `maxToolsPerPlatform` (default 40) actions and no `actions`/`allowTools` filter gets `one_find_actions`, `one_get_action` and `one_run_action` instead. `one_find_actions` uses One's action selector, which returns the best match with a confidence and its documentation, so the model can usually go straight to `one_run_action`. These tools are restricted to the platforms you enabled.
 - **Connect links.** A platform with no usable connection becomes `connect_<platform>`, which returns `{ connectRequired, url }` for the agent to hand to the user. With a secret key the link opens One's dashboard.
-- **Controls.** `allowTools` / `disallowTools` / `requireApproval` take tool-id globs, and `requireApproval` maps to Mastra's tool approval. Results over `maxResultChars` (default 30 000) are truncated before they reach the model.
+- **Controls.** `allowTools` / `disallowTools` take tool-id globs. `requireApproval` takes globs, `true`, or `'writes'`, which pauses only actions that change data (GET reads; PUT/PATCH/DELETE write; a POST is judged by its title, so "List Issues" over GraphQL runs and "Create Issue" pauses). It maps to Mastra's tool approval. Results over `maxResultChars` (default 30 000) are truncated before they reach the model.
 - **Per request.** The resolver runs on every request, so new connections appear without a redeploy. Catalogs and schemas are cached for 10 minutes and connections for 30 seconds.
 
 ### Per-user access with One Connect
@@ -83,7 +83,7 @@ import { OneToolProvider } from '@withone/mastra/provider'
 
 export const mastra = new Mastra({
   storage,
-  editor: new MastraEditor({ toolProviders: { one: new OneToolProvider({ requireApproval: ['*_delete_*'] }) } }),
+  editor: new MastraEditor({ toolProviders: { one: new OneToolProvider({ requireApproval: 'writes' }) } }),
 })
 ```
 

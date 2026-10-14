@@ -143,6 +143,17 @@ describe('OneToolProvider', () => {
     expect(await make(fake).resolveTools(['linear_list_issues'])).toEqual({})
   })
 
+  it("pauses only actions that change data with requireApproval: 'writes'", async () => {
+    const tools = (await make(fakeOne(), { requireApproval: 'writes' }).resolveToolsVNext({
+      toolSlugs: ['linear_list_issues', 'linear_create_issue'],
+      toolMeta: {},
+      connectionId: 'test::linear::default::a',
+      toolkit: 'linear',
+    })) as any
+    expect(tools.linear_list_issues.requireApproval).toBe(false)
+    expect(tools.linear_create_issue.requireApproval).toBe(true)
+  })
+
   it('refuses to resolve against a failed connection', async () => {
     const provider = make(fakeOne())
     await expect(
