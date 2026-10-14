@@ -258,11 +258,11 @@ curl -s -X POST localhost:4111/api/agents/personal/generate -H 'content-type: ap
 
 **Expect:** real issues from the Linear workspace alice granted, read through her grant, not your `ONE_SECRET`.
 
-**f. Revoke.** In One's dashboard, revoke the app's access. Alice's next request gets a reconnect link instead of data. A call outside her grant (e.g. a write with a read-only permission set) comes back with `blockedByGrant: true`.
+**f. Revoke.** In One's dashboard, revoke the app's access. Alice's next request gets only `connect_*` tools again. A call outside her grant (e.g. a write with a read-only permission set) comes back with `blockedByGrant: true`.
 
 The demo keeps each user's One reference in `/tmp/one-mastra-connect-users.json`. A real app stores it on its users table.
 
-> Steps a–c and the authorize redirect (302 to One's consent page with PKCE and a state cookie) were checked with placeholder credentials on 2026-10-14. Steps d–f need a real Connect app.
+> Steps a–f were run live on 2026-10-14 with a production Connect app. After revoking, alice's tools went back to `connect_linear` / `connect_gmail` on the next request, so calling `one_find_actions` for her returns `Tool not found`.
 
 ## Cleaning up
 
