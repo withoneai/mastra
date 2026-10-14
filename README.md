@@ -11,6 +11,7 @@ Give your [Mastra](https://mastra.ai) agents and workflows the apps you've conne
 - [Run One actions in workflows](#run-one-actions-in-workflows)
 - [Start workflows from app events](#start-workflows-from-app-events)
 - [Configuration](#configuration)
+- [Troubleshooting](#troubleshooting)
 
 ## Quick start
 
@@ -30,6 +31,8 @@ cd my-agent && npm run dev        # Mastra Studio at http://localhost:4111
 
 Add your model key to `.env`, open Studio, pick **One agent**, and ask _"What are my three most recent Linear issues?"_
 
+The One agent uses Anthropic by default. For another provider, set its key and `MODEL` in `.env`, e.g. `OPENAI_API_KEY=…` and `MODEL=openai/gpt-5.5`.
+
 ## Add One to an agent
 
 ```bash
@@ -41,6 +44,8 @@ npm install @withone/mastra
 ONE_SECRET=sk_live_…        # your One API key, from app.withone.ai
 ```
 
+Give an agent the apps you want by their One name:
+
 ```ts
 import { Agent } from '@mastra/core/agent'
 import { oneTools } from '@withone/mastra'
@@ -51,17 +56,25 @@ export const assistant = new Agent({
   instructions: 'Help the user across their apps. Use the tools; never invent data.',
   model: 'anthropic/claude-sonnet-5-5',
   defaultOptions: { maxSteps: 15 },
-  tools: oneTools({
-    platforms: {
-      'cal-com': true,
-      gmail: { allowTools: ['gmail_list_*', 'gmail_send_*'], requireApproval: 'writes' },
-      linear: 'discover',
-    },
-  }),
+  tools: oneTools({ platforms: { gmail: true, linear: true } }),
 })
 ```
 
-The tools are worked out on every request, so an app connected on One shows up on the next message without a restart.
+Register it and use it like any Mastra agent:
+
+```ts
+import { Mastra } from '@mastra/core'
+
+export const mastra = new Mastra({ agents: { assistant } })
+
+const reply = await assistant.generate('Summarise my unread email and my open Linear issues.')
+console.log(reply.text)
+```
+
+- **App names** are One's platform names: `gmail`, `google-calendar`, `cal-com`, `hubspot`. `one list` (One CLI) shows the ones you've connected.
+- **Tool ids** are the app name plus the action title in snake_case: Gmail's "Send Email" is `gmail_send_email`. To list an app's ids, log `Object.keys(await oneTools({ platforms: { gmail: 'all' } })())`, or browse the app in Studio's One picker.
+- **Credentials never reach the model.** The agent sees action names and input schemas; One adds the auth to each call.
+- **New connections appear on the next message.** The tools are worked out on every request, so no restart is needed.
 
 ### How each app's tools look
 
@@ -86,6 +99,20 @@ new Agent({
 ```
 
 ### Per-app options
+
+Pass an object instead of `true` to narrow an app or add approvals:
+
+```ts
+oneTools({
+  platforms: {
+    'cal-com': true,
+    gmail: { allowTools: ['gmail_list_*', 'gmail_send_*'], requireApproval: 'writes' },
+    linear: 'discover',
+  },
+})
+```
+
+Everything an app accepts:
 
 ```ts
 gmail: {
@@ -217,6 +244,17 @@ Every option can also be passed in code (`secret`, `baseUrl`, …).
 **Requirements:** Node 22.13+, `@mastra/core` 1.76+, and `zod` 3.25+ or 4. `@mastra/editor` only for the Studio provider. Works from both `import` and `require`.
 
 **Coding agents:** `init` installs the skill for you; otherwise run `npx skills add withoneai/mastra`.
+
+## Troubleshooting
+
+| You see                                                          | Why, and the fix                                                                                                                   |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| The agent calls tools but gives an empty answer                  | It ran out of steps. Discover mode needs about four per answer (find → get → run → reply); set `defaultOptions: { maxSteps: 15 }`  |
+| `401` from One                                                   | The key and the API don't match, e.g. a development key against production. Set `ONE_BASE_URL` to the API your key is for          |
+| A tool you listed in `allowTools` or picked in Studio is missing | The id doesn't match an action. Check the ids as shown above; unknown ids are skipped                                              |
+| `connect_<app>` instead of the app's tools                       | The app has no working connection on One (or, in per-user mode, the user hasn't granted it). Connect it and send the message again |
+| No **Create agent** button in Studio                             | Mastra 1.77 hides it; start Studio with `MASTRA_EXPERIMENTAL_UI=true`                                                              |
+| A write runs without asking                                      | Add `requireApproval: 'writes'` (or `true`) to that app                                                                            |
 
 ## Licence
 

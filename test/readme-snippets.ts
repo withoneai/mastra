@@ -34,6 +34,29 @@ export const assistant = new Agent({
   }),
 })
 
+// The simplest agent, registered and called
+export const simple = new Agent({
+  id: 'assistant',
+  name: 'Assistant',
+  instructions: 'Help the user across their apps. Use the tools; never invent data.',
+  model: 'anthropic/claude-sonnet-5-5',
+  defaultOptions: { maxSteps: 15 },
+  tools: oneTools({ platforms: { gmail: true, linear: true } }),
+})
+export const simpleMastra = new Mastra({ agents: { simple } })
+const reply = await simple.generate('Summarise my unread email and my open Linear issues.')
+console.log(reply.text)
+console.log(Object.keys(await oneTools({ platforms: { gmail: 'all' } })()))
+
+// Per-app options
+oneTools({
+  platforms: {
+    'cal-com': true,
+    gmail: { allowTools: ['gmail_list_*', 'gmail_send_*'], requireApproval: 'writes' },
+    linear: 'discover',
+  },
+})
+
 // 'all' + ToolSearchProcessor
 new Agent({
   id: 'search',
