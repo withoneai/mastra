@@ -12,6 +12,8 @@ export const personalAgent = oneConnect
         'You help the current user in their own connected apps. Use the tools; never invent data. ' +
         'If a tool returns connectRequired, give the user the link and ask them to try again after connecting.',
       model: process.env.MODEL ?? 'anthropic/claude-sonnet-5-5',
+      // Discover mode takes several steps (find → get → run → answer); Mastra's API default of 5 is too few.
+      defaultOptions: { maxSteps: 15 },
       tools: oneTools({
         connect: oneConnect,
         userId: ({ requestContext }) => requestContext?.get('userId'),

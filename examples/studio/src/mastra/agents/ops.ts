@@ -6,6 +6,8 @@ export const opsAgent = new Agent({
   name: 'Ops copilot',
   instructions: 'You help the user across their connected apps. Use the tools; never invent data.',
   model: process.env.MODEL ?? 'anthropic/claude-sonnet-5-5',
+  // Discover mode takes several steps (find → get → run → answer); Mastra's API default of 5 is too few.
+  defaultOptions: { maxSteps: 15 },
   tools: oneTools({
     platforms: {
       'cal-com': { allowTools: ['cal_com_get_event_types', 'cal_com_get_my_profile'] },

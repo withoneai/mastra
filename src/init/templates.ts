@@ -13,6 +13,8 @@ export const oneAgent = new Agent({
     'If a tool returns connectRequired, give the user the link and ask them to try again after connecting.',
   ].join(' '),
   model: process.env.MODEL ?? 'anthropic/claude-sonnet-5-5',
+  // Discover mode takes several steps (find → get → run → answer); Mastra's API default of 5 is too few.
+  defaultOptions: { maxSteps: 15 },
   tools: oneTools({
     platforms: {
 ${entries}

@@ -34,6 +34,7 @@ export const opsAgent = new Agent({
   name: 'Ops copilot',
   instructions: 'Help the user run operations across their apps.',
   model: 'anthropic/claude-sonnet-5-5',
+  defaultOptions: { maxSteps: 15 }, // discover mode needs find → get → run → answer
   tools: oneTools({
     platforms: {
       'cal-com': true,

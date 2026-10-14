@@ -18,6 +18,7 @@ export const agent = new Agent({
   name: 'Ops',
   instructions: '…',
   model: 'anthropic/claude-sonnet-5-5',
+  defaultOptions: { maxSteps: 15 }, // discover mode needs find → get → run → answer
   tools: oneTools({
     platforms: {
       stripe: { allowTools: ['stripe_list_*', 'stripe_create_a_refund'], requireApproval: ['stripe_create_*'] },
