@@ -7,6 +7,7 @@
     "@mastra/core": "^1.77.0",
     "@mastra/editor": "^0.16.2",
     "@mastra/libsql": "^1.26.1",
+    "@withone/connect": "^0.17.1",
     "@withone/mastra": "link:../..",
     "zod": "^4.0.0"
   },

@@ -17,6 +17,9 @@ importers:
       '@mastra/libsql':
         specifier: ^1.26.1
         version: 1.26.1(@mastra/core@1.77.0(zod-to-json-schema@3.25.2(zod@4.6.7))(zod@4.6.7))
+      '@withone/connect':
+        specifier: ^0.17.1
+        version: 0.17.1
       '@withone/mastra':
         specifier: link:../..
         version: link:../..
@@ -918,6 +921,18 @@ packages:
 
   '@types/ws@8.18.2':
     resolution: {integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==}
+
+  '@withone/connect@0.17.1':
+    resolution: {integrity: sha512-W4XA3UOl66MZ9dMA+EFzFsHB0JbsGfhNmNTgGDL9agVHZ/yHhlK8a32HLyq+gPEhg5wgQhk/oukakTdhEefDVw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      react: '>=17'
+      vue: '>=3'
+    peerDependenciesMeta:
+      react:
+        optional: true
+      vue:
+        optional: true
 
   '@workflow/serde@4.1.0':
     resolution: {integrity: sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ==}
@@ -2931,6 +2946,8 @@ snapshots:
   '@types/ws@8.18.2':
     dependencies:
       '@types/node': 26.6.5
+
+  '@withone/connect@0.17.1': {}
 
   '@workflow/serde@4.1.0': {}
 

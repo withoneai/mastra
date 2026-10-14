@@ -43,7 +43,7 @@ const oneConnect = createOneConnect({ /* clientId, clientSecret, redirectUri, co
 oneTools({
   connect: oneConnect,
   userId: ({ requestContext }) => requestContext.get('userId'),
-  connectUrl: ({ platform }) => `/api/one/authorize?connector=${platform}`,
+  connectUrl: ({ platform }) => `/api/one/authorize#one_connector=${platform}`,
   platforms: { gmail: true },
 })
 ```

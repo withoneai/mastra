@@ -60,7 +60,7 @@ const oneConnect = createOneConnect({ clientId, clientSecret, redirectUri, conne
 oneTools({
   connect: oneConnect,
   userId: ({ requestContext }) => requestContext.get('userId'),
-  connectUrl: ({ platform }) => `/api/one/authorize?connector=${platform}`,
+  connectUrl: ({ platform }) => `/api/one/authorize#one_connector=${platform}`,
   platforms: { gmail: true, slack: true },
 })
 // agent.generate(msg, { requestContext: new RequestContext([['userId', user.id]]) })

@@ -42,7 +42,7 @@ export interface OneToolsOptions {
   userId?: (args: ResolveArgs) => string | undefined
   /**
    * Link a user follows to connect a platform the agent needs. With `connect` this is
-   * usually your authorize route (`/api/one/authorize?connector=<platform>`). Defaults
+   * usually your authorize route (`/api/one/authorize#one_connector=<platform>`, which opens that app first on One's consent page). Defaults
    * to One's dashboard when using a secret key. Return `undefined` to skip.
    */
   connectUrl?: (args: { platform: string; userId?: string }) => string | undefined

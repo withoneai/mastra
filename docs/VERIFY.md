@@ -202,18 +202,70 @@ For a **real** relay, the target URL must be public, because One blocks private 
 
 ## 8. Per-user mode (One Connect)
 
-This needs a One Connect app, so it has only been tested against fakes and the real client's interface. To check it live:
+Here the agent acts for **each of your app's users** with only what that user granted, instead of with your own One key. `examples/studio` includes a `personal` agent and the two Connect routes (`/one/authorize`, `/one/callback`). They switch on once the Connect app's credentials are in `.env`. The demo has no sign-in, so `?as=<name>` on the authorize link stands in for "which of my users clicked Connect".
 
-1. Create an app under Dashboard → Developers → Connect, with callback `http://localhost:4111/api/one/callback`.
-2. Mount `@withone/connect`'s authorize and callback routes on the Mastra server.
-3. Configure `oneTools({ connect, userId, connectUrl })` as in the README.
+**a. Create a Connect app.** Connect keys work on **production** only, so use `https://app.withone.ai`, not the dev dashboard:
 
-**Expect:**
+1. **Developers → Connect → New app**. Register the callback exactly as `http://localhost:4111/one/callback`.
+2. *(Optional)* Create a **permission set** (e.g. Linear read) and copy its ID. Without one, the consent page lists your connections and you choose.
+3. On the app's page, **Credentials → Connect keys → create**. It is shown once.
 
-- A user with no grant gets only `connect_<app>` tools pointing at your authorize route.
-- After they connect, their next message gets typed tools that act on *their* accounts.
+**b. Add the credentials** to `examples/studio/.env`:
+
+```bash
+ONE_CLIENT_ID=…
+ONE_CLIENT_SECRET=one_secret_…
+ONE_CONNECT_KEY=sk_live_…
+ONE_PERMISSION_SET=…          # optional
+```
+
+Restart `npx mastra dev`. `curl -s localhost:4111/api/agents | python3 -c "import json,sys;print(list(json.load(sys.stdin)))"` now lists `personal`.
+
+**c. Before connecting.** Per-user requests pass the user in Mastra's request context:
+
+```bash
+curl -s -G localhost:4111/api/agents/personal --data-urlencode 'requestContext={"userId":"alice"}' \
+  | python3 -c "import json,sys;print(list(json.load(sys.stdin)['tools']))"     # ['connect_linear', 'connect_gmail']
+curl -s localhost:4111/api/agents/personal | python3 -c "import json,sys;print(list(json.load(sys.stdin)['tools']))"   # [] (no user)
+curl -s -X POST localhost:4111/api/agents/personal/tools/connect_linear/execute -H 'content-type: application/json' \
+  -d '{"data":{},"requestContext":{"userId":"alice"}}'; echo   # url: http://localhost:4111/one/authorize?as=alice#one_connector=linear
+```
+
+**d. Connect as alice.** Open `http://localhost:4111/one/authorize?as=alice#one_connector=linear` in a browser:
+
+1. Sign in to One with your email and code.
+2. Pick the space, then grant Linear.
+3. You land back on Studio with `?one_connect=success`, and the server logs `[one-connect] alice: success`.
+
+**e. After connecting:**
+
+```bash
+curl -s -G localhost:4111/api/agents/personal --data-urlencode 'requestContext={"userId":"alice"}' \
+  | python3 -c "import json,sys;print(list(json.load(sys.stdin)['tools']))"     # one_find_actions, one_get_action, one_run_action, connect_gmail
+curl -s -G localhost:4111/api/agents/personal --data-urlencode 'requestContext={"userId":"bob"}' \
+  | python3 -c "import json,sys;print(list(json.load(sys.stdin)['tools']))"     # still only connect_* tools
+curl -s -X POST localhost:4111/api/agents/personal/tools/one_find_actions/execute -H 'content-type: application/json' \
+  -d '{"data":{"platform":"linear","query":"list issues"},"requestContext":{"userId":"alice"}}'; echo
+```
+
+With a model key in `.env` (`OPENAI_API_KEY` + `MODEL=openai/gpt-5.5`, or `ANTHROPIC_API_KEY`), alice can chat:
+
+```bash
+curl -s -X POST localhost:4111/api/agents/personal/generate -H 'content-type: application/json' \
+  -d '{"messages":[{"role":"user","content":"What are my three most recent Linear issues?"}],"requestContext":{"userId":"alice"}}' \
+  | python3 -c "import json,sys;print(json.load(sys.stdin)['text'])"
+```
+
+**Expect:** real issues from the Linear workspace alice granted, read through her grant, not your `ONE_SECRET`.
+
+**f. Revoke.** In One's dashboard, revoke the app's access. Alice's next request gets a reconnect link instead of data. A call outside her grant (e.g. a write with a read-only permission set) comes back with `blockedByGrant: true`.
+
+The demo keeps each user's One reference in `/tmp/one-mastra-connect-users.json`. A real app stores it on its users table.
+
+> Steps a–c and the authorize redirect (302 to One's consent page with PKCE and a state cookie) were checked with placeholder credentials on 2026-10-14. Steps d–f need a real Connect app.
 
 ## Cleaning up
 
 - Stop the dev servers with Ctrl-C.
 - Delete `~/one-mastra-test`. Its `.env` contains your One key.
+- Delete `examples/studio/.env` (One key, Connect credentials) and `/tmp/one-mastra-connect-users.json`.
