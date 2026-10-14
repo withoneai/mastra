@@ -38,6 +38,7 @@ const PROVIDER_ID = 'one'
 const AUTH_PREFIX = 'oneauth_'
 const DEFAULT_TTL = 10 * 60_000
 const KNOWLEDGE_CONCURRENCY = 8
+const MAX_SEARCH_TOOLKITS = 3
 
 interface PendingAuth {
   platform: string
@@ -105,14 +106,20 @@ export class OneToolProvider extends BaseToolProvider {
   protected async listAllTools(opts: ListToolsOpts): Promise<ListToolsResult> {
     const page = opts.page ?? 1
     const perPage = Math.min(opts.perPage ?? 50, 200)
-    const toolkits = opts.toolkit ? [opts.toolkit] : [...this.allowedToolkits].filter((t) => !t.includes('*'))
+    let toolkits = opts.toolkit ? [opts.toolkit] : [...this.allowedToolkits].filter((t) => !t.includes('*'))
+    let search = opts.search
+    if (toolkits.length === 0 && search) {
+      // Studio's "All" view searches without a toolkit: treat the query as an app name.
+      toolkits = await this.toolkitsMatching(search)
+      search = undefined
+    }
     if (toolkits.length === 0) return { data: [], pagination: { page, perPage, hasMore: false } }
 
     const rows: ListToolsResult['data'] = []
     for (const toolkit of toolkits) {
       let ids = await this.toolIds(toolkit)
-      if (opts.search) {
-        const rank = new Map((await this.client.searchActions(toolkit, opts.search, perPage)).map((a, i) => [a.systemId, i]))
+      if (search) {
+        const rank = new Map((await this.client.searchActions(toolkit, search, perPage)).map((a, i) => [a.systemId, i]))
         ids = new Map(
           [...ids]
             .filter(([, action]) => rank.has(action.systemId))
@@ -214,6 +221,22 @@ export class OneToolProvider extends BaseToolProvider {
     } catch (err) {
       return { ok: false, message: err instanceof Error ? err.message : 'One API unreachable' }
     }
+  }
+
+  private async toolkitsMatching(query: string): Promise<string[]> {
+    const q = query.trim().toLowerCase()
+    const connectors = await this.connectors.get('all', () => this.client.listConnectors())
+    const score = (c: OneConnector) => {
+      const names = [c.platform, c.name, c.title ?? ''].map((n) => n.toLowerCase())
+      if (names.some((n) => n === q)) return 0
+      if (names.some((n) => n.startsWith(q))) return 1
+      return names.some((n) => n.includes(q)) ? 2 : 3
+    }
+    return connectors
+      .filter((c) => c.active !== false && score(c) < 3)
+      .sort((a, b) => score(a) - score(b))
+      .slice(0, MAX_SEARCH_TOOLKITS)
+      .map((c) => c.platform)
   }
 
   private async toolIds(platform: string): Promise<Map<string, OneAction>> {

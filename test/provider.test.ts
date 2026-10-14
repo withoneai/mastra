@@ -83,6 +83,11 @@ describe('OneToolProvider', () => {
     expect(tools.data.map((t) => t.slug)).toEqual(['linear_create_issue', 'linear_list_issues'])
   })
 
+  it('treats a search with no toolkit as an app-name search', async () => {
+    const tools = await make(fakeOne()).listToolsVNext({ search: 'Lin' })
+    expect(tools.data.map((t) => t.slug)).toEqual(['linear_list_issues', 'linear_create_issue'])
+  })
+
   it('returns nothing for an unscoped tool listing rather than walking 900+ platforms', async () => {
     const tools = await make(fakeOne()).listToolsVNext({})
     expect(tools.data).toEqual([])
