@@ -18,6 +18,10 @@
     "./workflows": {
       "types": "./dist/workflows.d.ts",
       "import": "./dist/workflows.js"
+    },
+    "./triggers": {
+      "types": "./dist/triggers.d.ts",
+      "import": "./dist/triggers.js"
     }
   },
   "files": [
