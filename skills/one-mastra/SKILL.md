@@ -1,6 +1,6 @@
 ---
 name: one-mastra
-description: Give Mastra agents and workflows access to apps connected through One (Gmail, Slack, Stripe, HubSpot and 970+ more) with @withone/mastra. Use when adding app integrations, third-party tools, per-user connections, approval gates on app actions, or webhook-triggered workflows to a Mastra project.
+description: Give Mastra agents and workflows access to apps connected through One (Gmail, Slack, Stripe, HubSpot and 972+ apps in all) with @withone/mastra. Use when adding app integrations, third-party tools, per-user connections, approval gates on app actions, or webhook-triggered workflows to a Mastra project.
 ---
 
 # @withone/mastra
@@ -21,9 +21,10 @@ export const agent = new Agent({
   defaultOptions: { maxSteps: 15 }, // discover mode needs find → get → run → answer
   tools: oneTools({
     platforms: {
-      stripe: { allowTools: ['stripe_list_*', 'stripe_create_a_refund'], requireApproval: ['stripe_create_*'] },
+      stripe: { allowTools: ['stripe_list_*', 'stripe_create_a_refund'], requireApproval: 'writes' },
       slack: true, // typed tool per action, or search/run tools if the app has > 40 actions
       linear: 'discover', // always search/run tools: one_find_actions, one_get_action, one_run_action
+      hubspot: 'all', // a typed tool for every action; pair with ToolSearchProcessor (below)
     },
   }),
 })
@@ -33,6 +34,8 @@ export const agent = new Agent({
 - Tool ids are `<platform>_<action title>` in snake_case, e.g. `cal_com_get_event_types`. Use them in `allowTools`, `disallowTools` and `requireApproval` globs.
 - Tool input is `{ path?, query?, body? }` from the action's schema. Results are `{ ok, status, data }`.
 - An app that isn't connected becomes `connect_<platform>`, which returns `{ connectRequired, url }`. Tell the agent to give the user the link.
+- `requireApproval`: `true`, `'writes'` (only actions that change data) or tool-id globs.
+- With `'all'`, add `inputProcessors: [new ToolSearchProcessor({ tools: {}, includeResolvedTools: true })]` (from `@mastra/core/processors`) so the model loads only the tools it needs.
 - To combine with other tools: `tools: async (ctx) => ({ ...(await one(ctx)), myTool })`.
 
 ## Per-user access (One Connect)
@@ -55,7 +58,7 @@ Pass the user on each call: `agent.generate(msg, { requestContext: new RequestCo
 import { MastraEditor } from '@mastra/editor'
 import { OneToolProvider } from '@withone/mastra/provider'
 
-new Mastra({ storage, editor: new MastraEditor({ toolProviders: { one: new OneToolProvider() } }) })
+new Mastra({ storage, editor: new MastraEditor({ toolProviders: { one: new OneToolProvider({ requireApproval: 'writes' }) } }) })
 ```
 
 One then appears in Studio's tool picker: browse apps, connect, and attach actions to agents without code.
@@ -86,3 +89,4 @@ Set `ONE_RELAY_SECRET` to the relay's signing secret. Point a One relay `url` ac
 - `ONE_SECRET`: One secret key (`sk_live_…` / `sk_test_…`).
 - `ONE_BASE_URL`: only for a non-production One API.
 - `ONE_RELAY_SECRET`: for `oneTrigger`.
+- `ONE_CONNECT_KEY`: a Connect app's key, for per-user mode.

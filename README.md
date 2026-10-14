@@ -1,81 +1,113 @@
 # @withone/mastra
 
-Give [Mastra](https://mastra.ai) agents and workflows every app connected through [One](https://withone.ai): 972+ platforms, with auth handled by One.
+Give your [Mastra](https://mastra.ai) agents and workflows the apps you've connected on [One](https://withone.ai): 972+ apps including Gmail, Slack, Linear, HubSpot and Stripe. One handles auth, so there's no OAuth code and no provider SDKs.
 
-> **Status: prototype, not yet published to npm.** Everything below runs against a live One account; see [Verifying it yourself](#verifying-it-yourself).
+![One in Mastra Studio's tool picker](docs/studio-one-tools.png)
 
-![One in Mastra Studio's tool picker](docs/screenshots/studio-one-linear-tools.png)
-
-| Entry point                                       | What it does                                                                           |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `oneTools()` from `@withone/mastra`               | An agent's `tools`: one typed tool per One action, per request                         |
-| `OneToolProvider` from `@withone/mastra/provider` | One in Mastra Studio's agent editor: browse apps, connect, attach actions without code |
-| `oneStep()` from `@withone/mastra/workflows`      | A One action as a workflow step, optionally paused for human approval                  |
-| `oneTrigger()` from `@withone/mastra/triggers`    | A Mastra route that starts a workflow from One webhook-relay events                    |
-| `npx @withone/mastra init`                        | Wires all of the above into a new or existing Mastra project                           |
+- [Quick start](#quick-start)
+- [Add One to an agent](#add-one-to-an-agent)
+- [Build agents in Mastra Studio](#build-agents-in-mastra-studio)
+- [Act for each of your users (One Connect)](#act-for-each-of-your-users-one-connect)
+- [Run One actions in workflows](#run-one-actions-in-workflows)
+- [Start workflows from app events](#start-workflows-from-app-events)
+- [Configuration](#configuration)
 
 ## Quick start
 
+You need a One account with a few apps connected ([app.withone.ai](https://app.withone.ai)) and a model key (e.g. `ANTHROPIC_API_KEY`).
+
 ```bash
-npx @withone/mastra init my-agent --platforms gmail,slack,linear
-cd my-agent && npm run dev        # Studio at http://localhost:4111
+npx @withone/mastra init my-agent --platforms gmail,linear,slack
+cd my-agent && npm run dev        # Mastra Studio at http://localhost:4111
 ```
 
-`init` reuses your One CLI login (`one login`) or `ONE_SECRET`, creates the project with `create-mastra` if needed, writes `src/mastra/agents/one-agent.ts`, registers One in Studio, adds `ONE_SECRET` to `.env`, and installs a coding-agent skill (`.claude/skills/one-mastra`).
+`init` creates a Mastra project (or updates the one in the current folder) and:
 
-## Agent tools
+- adds a **One agent** whose tools are your connected apps,
+- registers One in Studio's agent editor,
+- puts your One key in `.env` (from your [One CLI](https://github.com/withoneai/cli) login, `ONE_SECRET`, or `--secret`),
+- installs a skill that teaches coding agents (Claude Code, Cursor, Codex) how to use this package.
+
+Add your model key to `.env`, open Studio, pick **One agent**, and ask _"What are my three most recent Linear issues?"_
+
+## Add One to an agent
+
+```bash
+npm install @withone/mastra
+```
+
+```bash
+# .env
+ONE_SECRET=sk_live_…        # your One API key, from app.withone.ai
+```
 
 ```ts
 import { Agent } from '@mastra/core/agent'
 import { oneTools } from '@withone/mastra'
 
-export const opsAgent = new Agent({
-  id: 'ops',
-  name: 'Ops copilot',
-  instructions: 'Help the user run operations across their apps.',
+export const assistant = new Agent({
+  id: 'assistant',
+  name: 'Assistant',
+  instructions: 'Help the user across their apps. Use the tools; never invent data.',
   model: 'anthropic/claude-sonnet-5-5',
-  defaultOptions: { maxSteps: 15 }, // discover mode needs find → get → run → answer
+  defaultOptions: { maxSteps: 15 },
   tools: oneTools({
     platforms: {
       'cal-com': true,
-      gmail: { allowTools: ['gmail_list_*', 'gmail_create_draft'], requireApproval: ['gmail_create_*'] },
+      gmail: { allowTools: ['gmail_list_*', 'gmail_send_*'], requireApproval: 'writes' },
       linear: 'discover',
     },
   }),
 })
 ```
 
-- **Typed tools.** Each action becomes a tool such as `cal_com_get_event_types`, with an input schema (`{ path?, query?, body? }`) from One's action catalog. Headers and connection keys are stripped, so the model never sees credentials. Mastra validates inputs before anything is sent.
-- **Discover mode.** A platform with more than `maxToolsPerPlatform` (default 40) actions and no `actions`/`allowTools` filter gets `one_find_actions`, `one_get_action` and `one_run_action` instead. `one_find_actions` uses One's action selector, which returns the best match with a confidence and its documentation, so the model can usually go straight to `one_run_action`. These tools are restricted to the platforms you enabled.
-- **Connect links.** A platform with no usable connection becomes `connect_<platform>`, which returns `{ connectRequired, url }` for the agent to hand to the user. With a secret key the link opens One's dashboard.
-- **Controls.** `allowTools` / `disallowTools` take tool-id globs. `requireApproval` takes globs, `true`, or `'writes'`, which pauses only actions that change data (GET reads; PUT/PATCH/DELETE write; a POST is judged by its title, so "List Issues" over GraphQL runs and "Create Issue" pauses). It maps to Mastra's tool approval. Results over `maxResultChars` (default 30 000) are truncated before they reach the model.
-- **Per request.** The resolver runs on every request, so new connections appear without a redeploy. Catalogs and schemas are cached for 10 minutes and connections for 30 seconds.
+The tools are worked out on every request, so an app connected on One shows up on the next message without a restart.
 
-### Per-user access with One Connect
+### How each app's tools look
+
+| Setting      | What the agent gets                                                              | Use it for                                                                    |
+| ------------ | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `true`       | One typed tool per action, e.g. `cal_com_get_event_types`, with its input schema | Apps with up to 40 actions, or a filtered set                                 |
+| `'discover'` | Three tools: `one_find_actions` → `one_get_action` → `one_run_action`            | Big apps (Linear has ~490 actions). One picks the action and returns its docs |
+| `'all'`      | A typed tool for every action, with no cap                                       | Big apps, together with Mastra's `ToolSearchProcessor` (below)                |
+
+An app with more than 40 actions and no filter switches to `'discover'` automatically. Discover mode takes a few steps per answer, so give the agent `maxSteps` of 10 or more.
+
+With `'all'`, add Mastra's tool search so the model only loads the tools a task needs:
 
 ```ts
-oneTools({
-  connect: {
-    connectKey: process.env.ONE_CONNECT_KEY!, // the Connect app's key (production only)
-    loadUser: (userId) => userStore.loadUser(userId), // the reference saved when the user connected
-  },
-  userId: ({ requestContext }) => requestContext.get('userId'),
-  connectUrl: ({ platform }) => `/api/one/authorize#one_connector=${platform}`,
-  platforms: { gmail: true, slack: true },
+import { ToolSearchProcessor } from '@mastra/core/processors'
+
+new Agent({
+  // …
+  tools: oneTools({ platforms: { linear: 'all' } }),
+  inputProcessors: [new ToolSearchProcessor({ tools: {}, includeResolvedTools: true })],
 })
-// agent.generate(msg, { requestContext: new RequestContext([['userId', user.id]]) })
 ```
 
-Users connect through your app's authorize and callback routes, which `@withone/connect` provides (`createOneConnect` + `createOneConnectRoutes`). Its `userStore` saves one reference per user; hand the same `loadUser` to `oneTools`. This package talks to One directly and doesn't depend on `@withone/connect`. Passing a `createOneConnect` client as `connect` also works.
+### Per-app options
 
-How it behaves:
+```ts
+gmail: {
+  allowTools: ['gmail_list_*'],      // keep only these tool ids (globs)
+  disallowTools: ['*_delete_*'],     // drop these
+  actions: ['Send Email'],           // or pick actions by title or One action id
+  requireApproval: 'writes',         // pause for a human: true, 'writes', or tool-id globs
+  connectionKey: 'live::gmail::…',   // use this connection instead of the first working one
+  mode: 'discover',                  // 'typed' | 'discover' | 'all'
+}
+```
 
-- Each request acts with that user's grant.
-- A user who hasn't connected an app gets `connect_<platform>` pointing at your authorize route.
-- If access is revoked mid-session, the tool returns a reconnect link.
-- A call outside the grant comes back as `blockedByGrant: true`.
+- **`requireApproval: 'writes'`** pauses only actions that change data. GET reads; PUT, PATCH and DELETE write; a POST is judged by its title, so "List Issues" runs and "Create Issue" waits. Studio shows an approve/decline card; in code, resume with `agent.approveToolCall({ runId })`.
+- **An app you haven't connected** becomes a `connect_<app>` tool. The agent calls it and hands the user a link to connect the app.
+- **Errors go to the model, not up the stack.** A failed call returns `{ ok: false, status, data }` with the provider's message, so the agent can fix its request and retry.
+- **Large responses** are cut at 30,000 characters (`maxResultChars`) before they reach the model.
 
-## Mastra Studio
+To mix One's tools with your own: `tools: async (ctx) => ({ ...(await one(ctx)), myTool })`, where `const one = oneTools({ … })`.
+
+## Build agents in Mastra Studio
+
+Register One as a tool provider and anyone on your team can build agents with One's apps in Studio, without code:
 
 ```ts
 import { Mastra } from '@mastra/core'
@@ -83,20 +115,50 @@ import { MastraEditor } from '@mastra/editor'
 import { OneToolProvider } from '@withone/mastra/provider'
 
 export const mastra = new Mastra({
-  storage,
-  editor: new MastraEditor({ toolProviders: { one: new OneToolProvider({ requireApproval: 'writes' }) } }),
+  // …agents, storage
+  editor: new MastraEditor({
+    toolProviders: { one: new OneToolProvider({ requireApproval: 'writes' }) },
+  }),
 })
 ```
 
-`OneToolProvider` implements Mastra's `ToolProvider` contract (`@mastra/core/tool-provider`): toolkits are One platforms, tools are One actions, and connections are One connection keys. In Studio go to **Agents → Create agent → Tools → One**: browse apps, search actions, pick tools, and pin a connection.
+In Studio go to **Agents → Create agent → Tools → One**. Pick an app, search its actions, tick the ones you want and save. The agent runs them with your first working connection for that app. Apps you haven't connected offer a **Connect** button that opens One.
 
-The Connect flow works like this:
+> In Mastra 1.77, Studio only shows the **Create agent** button when started with `MASTRA_EXPERIMENTAL_UI=true npm run dev`.
 
-1. It opens One's dashboard on the app's connect dialog.
-2. It polls until the new connection is operational.
-3. It tags the connection with the flow id so the pin survives restarts.
+## Act for each of your users (One Connect)
 
-## Workflow steps
+If you're building a product, each of your users can connect _their own_ apps, and your agent acts with exactly the access they granted.
+
+1. Create a Connect app at [app.withone.ai](https://app.withone.ai) → **Developers → Connect** and register your callback URL.
+2. Add the sign-in routes with [`@withone/connect`](https://www.npmjs.com/package/@withone/connect) (`createOneConnect` and `createOneConnectRoutes`). Its `userStore` saves one reference per user.
+3. Give `oneTools` the Connect key, the same `loadUser`, and a way to tell which user a request is for:
+
+```ts
+oneTools({
+  connect: {
+    connectKey: process.env.ONE_CONNECT_KEY!,
+    loadUser: (userId) => userStore.loadUser(userId),
+  },
+  userId: ({ requestContext }) => requestContext.get('userId'),
+  connectUrl: ({ platform }) => `/api/one/authorize#one_connector=${platform}`,
+  platforms: { gmail: 'discover', linear: 'discover' },
+})
+
+// on each request
+agent.generate(message, { requestContext: new RequestContext([['userId', user.id]]) })
+```
+
+- A user only gets tools for apps they granted. Everything else is a `connect_<app>` tool pointing at your authorize route.
+- If they revoke access, their next request gets connect links again.
+- A call outside what they granted returns `blockedByGrant: true`.
+- A request without a user gets no One tools.
+
+[`examples/studio`](examples/studio) has a working setup.
+
+## Run One actions in workflows
+
+`oneStep` turns one One action into a workflow step, with its input schema from One's catalog:
 
 ```ts
 import { createWorkflow } from '@mastra/core/workflows'
@@ -112,66 +174,46 @@ export const refundFlow = createWorkflow({ id: 'refund', inputSchema, outputSche
   .commit()
 ```
 
-- `action` takes a tool id, a One action id or the exact title.
-- `requireApproval` suspends the run. Resume it with `run.resume({ step: refund, resumeData: { approved: true } })`.
-- A declined approval ends the workflow, unless you set `onDecline: 'continue'`.
-- A non-2xx response fails the step, unless you set `failOnError: false`.
+- `action` is a tool id, a One action id, or the action's exact title.
+- `requireApproval: true` suspends the run until `run.resume({ step: refund, resumeData: { approved: true } })`. A declined approval ends the workflow, unless you pass `onDecline: 'continue'`.
+- A non-2xx response fails the step, unless you pass `failOnError: false`.
 
-## Triggers
+## Start workflows from app events
+
+`oneTrigger` adds a route that starts a workflow whenever One's webhook relay delivers an event (a failed charge, a new issue, …):
 
 ```ts
 import { oneTrigger } from '@withone/mastra/triggers'
 
 new Mastra({
   workflows: { refundFlow },
-  server: { apiRoutes: [oneTrigger({ path: '/one/stripe', workflow: 'refundFlow', eventTypes: ['charge.failed'] })] },
+  server: {
+    apiRoutes: [oneTrigger({ path: '/one/stripe', workflow: 'refundFlow', eventTypes: ['charge.failed'] })],
+  },
 })
 ```
 
-- **Signature check.** The route verifies `X-Relay-Signature` (HMAC-SHA256 of the raw body with `ONE_RELAY_SECRET`).
-- **Responses.** Bad signatures get 401. Repeated `relayEventId`s are acknowledged as duplicates, and unlisted event types are acknowledged and ignored. Otherwise the route starts the workflow and answers 202.
-- **Connecting a relay.** Point a One relay `url` action at the route:
-  ```bash
-  one relay create --connection-key <stripe-key> --create-webhook --event-filters '["charge.failed"]'
-  one relay activate <id> --actions '[{"type":"url","url":"https://<host>/one/stripe","secret":"<ONE_RELAY_SECRET>"}]'
-  ```
+It checks the relay signature (`ONE_RELAY_SECRET`), ignores repeats and unlisted event types, and answers `202` with the run id. Point a relay at it with the One CLI:
+
+```bash
+one relay create --connection-key <stripe-key> --create-webhook --event-filters '["charge.failed"]'
+one relay activate <id> --actions '[{"type":"url","url":"https://<your-app>/one/stripe","secret":"<ONE_RELAY_SECRET>"}]'
+```
 
 ## Configuration
 
-| Variable           | Used by                                                                                                                           |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `ONE_SECRET`       | everything (secret-key mode)                                                                                                      |
-| `ONE_BASE_URL`     | a non-production One API, e.g. `https://development-api.withone.ai`                                                               |
-| `ONE_APP_URL`      | One dashboard origin for connect links (default: `https://development.withone.ai` for the dev API, else `https://app.withone.ai`) |
-| `ONE_RELAY_SECRET` | `oneTrigger`                                                                                                                      |
+| Variable           | Used for                                                                            |
+| ------------------ | ----------------------------------------------------------------------------------- |
+| `ONE_SECRET`       | Your One API key. Everything except per-user mode                                   |
+| `ONE_RELAY_SECRET` | Verifying webhook-relay events (`oneTrigger`)                                       |
+| `ONE_BASE_URL`     | A non-production One API, e.g. `https://development-api.withone.ai`                 |
+| `ONE_APP_URL`      | The One dashboard that connect links open (defaults to the one paired with the API) |
 
-Peer dependencies:
+Every option can also be passed in code (`secret`, `baseUrl`, …).
 
-- `@mastra/core >=1.76 <2` and `zod ^3.25 || ^4`
-- optional: `@mastra/editor` (Studio provider)
+**Requirements:** Node 22.13+, `@mastra/core` 1.76+, and `zod` 3.25+ or 4. `@mastra/editor` only for the Studio provider. Works from both `import` and `require`.
 
-Node ≥ 22.13.
-
-## Development
-
-```bash
-pnpm install
-pnpm test            # 53 offline tests against fake One / Connect APIs, plus real Mastra workflows
-pnpm typecheck
-pnpm build
-
-# Live, read-only checks against a real One account (reads .env, or exported vars):
-cp .env.example .env   # then set ONE_SECRET (and ONE_BASE_URL for dev)
-pnpm smoke                                   # oneTools
-pnpm smoke:provider   # OneToolProvider
-pnpm smoke:workflow   # oneStep with approve / decline
-```
-
-`examples/studio` is a Mastra app that uses every entry point. Run it with `pnpm install --ignore-workspace && npx mastra dev`.
-
-## Verifying it yourself
-
-See [docs/VERIFY.md](docs/VERIFY.md) for a start-to-end walkthrough.
+**Coding agents:** `init` installs the skill for you; otherwise run `npx skills add withoneai/mastra`.
 
 ## Licence
 
