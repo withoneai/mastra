@@ -31,6 +31,13 @@ cd my-agent && npm run dev        # Mastra Studio at http://localhost:4111
 
 Add your model key to `.env`, open Studio, pick **One agent**, and ask _"What are my three most recent Linear issues?"_
 
+**Or try it from a clone**, with no project at all: put `ONE_SECRET` and a model key in `.env`, then ask a question about your apps.
+
+```bash
+git clone https://github.com/withoneai/mastra && cd mastra && pnpm install
+npx tsx examples/agent.ts "What are my Gmail labels?"
+```
+
 The One agent uses Anthropic by default. For another provider, set its key and `MODEL` in `.env`, e.g. `OPENAI_API_KEY=…` and `MODEL=openai/gpt-5.5`.
 
 ## Add One to an agent
@@ -44,7 +51,7 @@ npm install @withone/mastra
 ONE_SECRET=sk_live_…        # your One API key, from app.withone.ai
 ```
 
-Give an agent the apps you want by their One name:
+Give an agent every app you've connected:
 
 ```ts
 import { Agent } from '@mastra/core/agent'
@@ -56,9 +63,11 @@ export const assistant = new Agent({
   instructions: 'Help the user across their apps. Use the tools; never invent data.',
   model: 'anthropic/claude-sonnet-5-5',
   defaultOptions: { maxSteps: 15 },
-  tools: oneTools({ platforms: { gmail: true, linear: true } }),
+  tools: oneTools(),
 })
 ```
+
+Or only some apps, by their One name: `oneTools({ platforms: { gmail: true, linear: true } })`.
 
 Register it and use it like any Mastra agent:
 
@@ -71,7 +80,7 @@ const reply = await assistant.generate('Summarise my unread email and my open Li
 console.log(reply.text)
 ```
 
-- **App names** are One's platform names: `gmail`, `google-calendar`, `cal-com`, `hubspot`. `one list` (One CLI) shows the ones you've connected.
+- **App names** are One's platform names, used in `platforms`: `gmail`, `google-calendar`, `cal-com`, `hubspot`. `one list` (One CLI) shows the ones you've connected.
 - **Tool ids** are the app name plus the action title in snake_case: Gmail's "Send Email" is `gmail_send_email`. To list an app's ids, log `Object.keys(await oneTools({ platforms: { gmail: 'all' } })())`, or browse the app in Studio's One picker.
 - **Credentials never reach the model.** The agent sees action names and input schemas; One adds the auth to each call.
 - **New connections appear on the next message.** The tools are worked out on every request, so no restart is needed.
@@ -84,7 +93,7 @@ console.log(reply.text)
 | `'discover'` | Three tools: `one_find_actions` → `one_get_action` → `one_run_action`            | Big apps (Linear has ~490 actions). One picks the action and returns its docs |
 | `'all'`      | A typed tool for every action, with no cap                                       | Big apps, together with Mastra's `ToolSearchProcessor` (below)                |
 
-An app with more than 40 actions and no filter switches to `'discover'` automatically. Discover mode takes a few steps per answer, so give the agent `maxSteps` of 10 or more.
+With no `platforms` at all, every connected app goes through the discover tools. An app with more than 40 actions and no filter switches to `'discover'` automatically. Discover mode takes a few steps per answer, so give the agent `maxSteps` of 10 or more.
 
 With `'all'`, add Mastra's tool search so the model only loads the tools a task needs:
 
@@ -176,7 +185,7 @@ oneTools({
 agent.generate(message, { requestContext: new RequestContext([['userId', user.id]]) })
 ```
 
-- A user only gets tools for apps they granted. Everything else is a `connect_<app>` tool pointing at your authorize route.
+- A user only gets tools for apps they granted. Everything else is a `connect_<app>` tool pointing at your authorize route. (Leave out `platforms` to give each user every app they granted, without connect links.)
 - If they revoke access, their next request gets connect links again.
 - A call outside what they granted returns `blockedByGrant: true`.
 - A request without a user gets no One tools.

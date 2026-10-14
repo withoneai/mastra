@@ -41,8 +41,9 @@ export const simple = new Agent({
   instructions: 'Help the user across their apps. Use the tools; never invent data.',
   model: 'anthropic/claude-sonnet-5-5',
   defaultOptions: { maxSteps: 15 },
-  tools: oneTools({ platforms: { gmail: true, linear: true } }),
+  tools: oneTools(),
 })
+oneTools({ platforms: { gmail: true, linear: true } })
 export const simpleMastra = new Mastra({ agents: { simple } })
 const reply = await simple.generate('Summarise my unread email and my open Linear issues.')
 console.log(reply.text)
