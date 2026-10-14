@@ -115,7 +115,7 @@
     }
   },
   "bin": {
-    "withone-mastra": "./dist/cli.js"
+    "withone-mastra": "dist/cli.js"
   },
   "module": "./dist/index.js",
   "publishConfig": {

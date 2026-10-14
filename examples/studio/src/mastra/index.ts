@@ -18,7 +18,7 @@ export const mastra = new Mastra({
   storage: new LibSQLStore({ id: 'studio-example', url: 'file:./mastra.db' }),
   editor: new MastraEditor({
     toolProviders: {
-      one: new OneToolProvider({ requireApproval: ['*_create_*', '*_delete_*', '*_update_*'] }),
+      one: new OneToolProvider({ requireApproval: 'writes' }),
     },
   }),
 })
