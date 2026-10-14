@@ -1,8 +1,28 @@
 {
   "name": "@withone/mastra",
-  "version": "0.0.0",
-  "description": "Use every app connected through One as typed Mastra tools.",
+  "version": "0.1.0",
+  "description": "The apps you've connected on One (Gmail, Slack, Linear, HubSpot, Stripe and 972+ in all) as tools, workflow steps and triggers for Mastra agents.",
+  "keywords": [
+    "mastra",
+    "one",
+    "withone",
+    "ai-agent",
+    "agents",
+    "tools",
+    "integrations",
+    "oauth",
+    "workflows"
+  ],
+  "homepage": "https://github.com/withoneai/mastra#readme",
+  "bugs": {
+    "url": "https://github.com/withoneai/mastra/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/withoneai/mastra.git"
+  },
   "license": "Apache-2.0",
+  "author": "One <engineering@withone.ai>",
   "type": "module",
   "main": "./dist/index.cjs",
   "types": "./dist/index.d.ts",
@@ -52,6 +72,8 @@
   "files": [
     "dist",
     "skills",
+    "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {
@@ -95,5 +117,9 @@
   "bin": {
     "withone-mastra": "./dist/cli.js"
   },
-  "module": "./dist/index.js"
+  "module": "./dist/index.js",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
 }
