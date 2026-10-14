@@ -37,6 +37,8 @@ export interface Backend {
   /** Cache partition for per-caller data. */
   readonly scope: string
   connections(platform: string): Promise<BackendConnection[]>
+  /** Every connection this caller can use, across apps. */
+  allConnections(): Promise<BackendConnection[]>
   countActions(platform: string): Promise<number>
   listActions(platform: string): Promise<OneAction[]>
   searchActions(platform: string, query: string, limit: number): Promise<OneAction[]>
@@ -60,6 +62,13 @@ export function secretBackend(client: OneClient): Backend {
           usable: c.state === 'operational' && c.active !== false,
           tags: c.tags,
         })),
+    allConnections: async () =>
+      (await client.listConnections()).map((c) => ({
+        key: c.key,
+        platform: c.platform,
+        usable: c.state === 'operational' && c.active !== false,
+        tags: c.tags,
+      })),
     countActions: (platform) => client.countActions(platform),
     listActions: (platform) => client.listActions(platform),
     searchActions: (platform, query, limit) => client.searchActions(platform, query, limit),
@@ -120,18 +129,18 @@ export function connectBackend(connect: OneConnectLike, userId: string): Backend
     path: a.path,
     tags: a.tags,
   })
+  const all = async (): Promise<BackendConnection[]> => {
+    try {
+      return (await connect.listConnections(userId)).map((c) => ({ key: c.key, platform: c.platform, usable: true }))
+    } catch (err) {
+      if (isConnectRequired(err)) return []
+      throw err
+    }
+  }
   return {
     scope: `connect:${userId}`,
-    connections: async (platform) => {
-      try {
-        return (await connect.listConnections(userId))
-          .filter((c) => c.platform === platform)
-          .map((c) => ({ key: c.key, platform: c.platform, usable: true }))
-      } catch (err) {
-        if (isConnectRequired(err)) return []
-        throw err
-      }
-    },
+    connections: async (platform) => (await all()).filter((c) => c.platform === platform),
+    allConnections: all,
     countActions: async (platform) => (await connect.listActions(userId, platform)).length,
     listActions: async (platform) => (await connect.listActions(userId, platform)).map(toAction),
     searchActions: async (platform, query, limit) => (await connect.searchActions(userId, platform, query, { limit })).map(toAction),
@@ -213,19 +222,19 @@ export function connectKeyBackend(client: OneClient, scope: RequestScope | null,
     const id = (a as OneActionKnowledge)._id ?? (a as OneAction).systemId
     return { systemId: id, title: a.title, key: id, method: a.method, path: a.path, tags: a.tags }
   }
+  const all = async (): Promise<BackendConnection[]> => {
+    if (!scope) return []
+    try {
+      return (await client.reachableConnections(scope)).map((c) => ({ key: c.key, platform: c.platform, usable: true }))
+    } catch (err) {
+      if (noGrant(err)) return []
+      throw err
+    }
+  }
   return {
     scope: `connect:${userId}`,
-    connections: async (platform) => {
-      if (!scope) return []
-      try {
-        return (await client.reachableConnections(scope))
-          .filter((c) => c.platform === platform)
-          .map((c) => ({ key: c.key, platform: c.platform, usable: true }))
-      } catch (err) {
-        if (noGrant(err)) return []
-        throw err
-      }
-    },
+    connections: async (platform) => (await all()).filter((c) => c.platform === platform),
+    allConnections: all,
     countActions: async (platform) => (await client.listKnowledge(platform, scope ?? undefined)).length,
     listActions: async (platform) => (await client.listKnowledge(platform, scope ?? undefined)).map(toAction),
     searchActions: async (platform, query, limit) => (await client.searchActions(platform, query, limit, scope ?? undefined)).map(toAction),

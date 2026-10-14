@@ -43,7 +43,11 @@ export interface ResolveArgs {
 
 export interface OneToolsOptions {
   /** Platforms to expose, keyed by One platform slug (`gmail`, `cal-com`, …). `true` = defaults. */
-  platforms: Record<string, true | 'discover' | 'all' | PlatformConfig>
+  /**
+   * Apps to expose, by One platform name (`gmail`, `cal-com`, …): `true` for the defaults, `'discover'`,
+   * `'all'`, or a config. Leave it out for every app the caller has connected, in discover mode.
+   */
+  platforms?: Record<string, true | 'discover' | 'all' | PlatformConfig>
   /** One secret key, when tools act for your own One account. Defaults to `process.env.ONE_SECRET`. */
   secret?: string
   /** Defaults to `process.env.ONE_BASE_URL` or `https://api.withone.ai`. */
@@ -95,7 +99,7 @@ const DESCRIPTION_LIMIT = 1_200
  * for one end user. A platform the caller hasn't connected yet becomes a
  * `connect_<platform>` tool that hands back a link to connect it.
  */
-export function oneTools(options: OneToolsOptions): OneToolsResolver {
+export function oneTools(options: OneToolsOptions = {}): OneToolsResolver {
   if (options.connect && !options.userId) throw new Error('[@withone/mastra] `connect` needs a `userId` resolver.')
   const client = options.connect
     ? undefined
@@ -158,13 +162,23 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
     const taken = new Set<string>()
     const discoverPlatforms: DiscoverPlatform[] = []
 
-    const entries = Object.entries(options.platforms).map(([platform, raw]) => ({
-      platform,
-      config: (raw === true ? {} : raw === 'discover' || raw === 'all' ? { mode: raw } : raw) as PlatformConfig,
-    }))
-    const platformConnections = await Promise.all(
-      entries.map(({ platform }) => connections.get(`${backend.scope}\u0000${platform}`, () => backend.connections(platform))),
-    )
+    let entries: Array<{ platform: string; config: PlatformConfig }>
+    let platformConnections: BackendConnection[][]
+    if (options.platforms) {
+      entries = Object.entries(options.platforms).map(([platform, raw]) => ({
+        platform,
+        config: (raw === true ? {} : raw === 'discover' || raw === 'all' ? { mode: raw } : raw) as PlatformConfig,
+      }))
+      platformConnections = await Promise.all(
+        entries.map(({ platform }) => connections.get(`${backend.scope}\u0000${platform}`, () => backend.connections(platform))),
+      )
+    } else {
+      // No list: every app this caller has a working connection for, each through the discover tools.
+      const all = (await connections.get(`${backend.scope}\u0000*`, () => backend.allConnections())).filter((c) => c.usable)
+      const platforms = [...new Set(all.map((c) => c.platform))].sort()
+      entries = platforms.map((platform) => ({ platform, config: { mode: 'discover' } }))
+      platformConnections = platforms.map((platform) => all.filter((c) => c.platform === platform))
+    }
 
     for (const [i, { platform, config }] of entries.entries()) {
       const connection = pickConnection(platformConnections[i] ?? [], config.connectionKey)

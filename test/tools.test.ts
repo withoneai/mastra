@@ -232,6 +232,17 @@ describe('oneTools', () => {
     expect(offered[0]!.length).toBeLessThan(5)
   })
 
+  it('with no platforms, exposes every connected app through the discover tools', async () => {
+    const { fetchImpl } = fakeOne()
+    const tools = (await oneTools({ secret: 'sk_test', fetch: fetchImpl, onWarning: quiet })()) as any
+    expect(Object.keys(tools).sort()).toEqual(['one_find_actions', 'one_get_action', 'one_run_action'])
+    expect(tools.one_find_actions.inputSchema['~standard'].jsonSchema.input({ target: 'draft-07' }).properties.platform.enum).toEqual([
+      'cal-com',
+    ])
+    const ran = await tools.one_run_action.execute({ actionId: 'conn_mod_def::get', path: { id: '1' } }, {})
+    expect(ran.ok).toBe(true)
+  })
+
   it('turns a platform with no connection into a connect tool that links to One', async () => {
     const { fetchImpl } = fakeOne()
     const tools = (await oneTools({

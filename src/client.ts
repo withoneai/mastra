@@ -152,17 +152,19 @@ export class OneClient {
   }
 
   async listConnections(params: { platform?: string; keys?: string[]; tags?: string[] } & RequestScope = {}): Promise<OneConnection[]> {
-    const out: OneConnection[] = []
-    for (let page = 1; ; page++) {
-      const q = new URLSearchParams({ limit: '100', page: String(page) })
+    const page = (n: number) => {
+      const q = new URLSearchParams({ limit: '100', page: String(n) })
       if (params.platform) q.set('platform', params.platform)
       if (params.keys?.length) q.set('key', params.keys.join(','))
       if (params.tags?.length) q.set('tags', params.tags.join(','))
-      const res = await this.getJson<{ rows: OneConnection[]; pages: number }>(`/vault/connections?${q}`, params)
-      out.push(...res.rows)
-      if (page >= res.pages || res.rows.length === 0) break
+      return this.getJson<{ rows: OneConnection[]; pages: number }>(`/vault/connections?${q}`, params)
     }
-    return out
+    // The first page says how many there are; fetch the rest at once.
+    const first = await page(1)
+    const rest = await Promise.all(Array.from({ length: Math.max(0, first.pages - 1) }, (_, i) => page(i + 2)))
+    const byKey = new Map<string, OneConnection>()
+    for (const c of [first, ...rest].flatMap((r) => r.rows)) byKey.set(c.key, c)
+    return [...byKey.values()]
   }
 
   /** Full action catalog for a platform. Core paging can skip or repeat rows, so empty pages are retried and rows deduped. */
