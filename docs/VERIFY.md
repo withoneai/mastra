@@ -9,18 +9,9 @@ Run it in WSL/Linux or macOS. Studio at `http://localhost:4111` also opens from 
 - Node ≥ 22.13 (`node -v`), pnpm (`npm i -g pnpm`), git, and `gh` for cloning the private repo.
 - A One secret key. Either:
   - you're logged in with the One CLI (`one whoami` shows the environment and `apiBase`), or
-  - you export `ONE_SECRET=sk_test_…` or `sk_live_…`.
+  - you have a key (`sk_test_…` or `sk_live_…`) to put in `.env` in step 2.
 - The **app connections** the steps use. The examples use `linear` and `cal-com`, which the dev sandbox account has. On another account, swap in apps you have connected (`one list`).
 - *(Optional, step 6 only)* A model key for chatting with the agent, e.g. `ANTHROPIC_API_KEY`.
-
-Set the environment you're testing against, either in a `.env` file at the repo root (`cp .env.example .env`, then fill it in) or exported in your shell:
-
-```bash
-ONE_SECRET=sk_test_…                                # your key
-ONE_BASE_URL=https://development-api.withone.ai     # omit for production
-```
-
-The `pnpm smoke*` scripts load `.env` automatically, and values you've exported take precedence. Mastra apps (`npm run dev`) read their own project's `.env`, which `init` writes for you.
 
 ## 1. Clone, install, run the offline tests
 
@@ -33,6 +24,21 @@ pnpm typecheck && pnpm test
 **Expect:** no type errors and `Tests 52 passed (52)`. These run against fake One and One Connect APIs, with real Mastra agents and workflows (in-memory storage). One test also checks the real `@withone/connect` client against the interface.
 
 ## 2. Live checks against your One account (read-only)
+
+First give the repo your One key. From the repo root:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env`:
+
+```bash
+ONE_SECRET=sk_test_…                                # your key
+ONE_BASE_URL=https://development-api.withone.ai     # dev; delete this line for production
+```
+
+The `pnpm smoke*` scripts load this `.env` automatically. Values exported in your shell take precedence. Keep the key and base URL matched: a dev key against the production URL, or the other way round, fails with 401.
 
 ```bash
 pnpm smoke
@@ -74,7 +80,9 @@ The last line confirms that declining stops the workflow.
 
 ## 3. `init` from an empty folder
 
-The package isn't on npm yet, so build a tarball and point `init` at it:
+The package isn't on npm yet, so build a tarball and point `init` at it.
+
+`init` runs in a different folder, so it does **not** read the repo's `.env`. It uses your One CLI login, or else an exported `ONE_SECRET` / `ONE_BASE_URL`, or else `--secret` / `--base-url`. If you're not logged in with `one login`, add `--secret sk_test_… --base-url https://development-api.withone.ai` to the command below. It writes the key into the new project's own `.env`.
 
 ```bash
 pnpm build && pnpm pack --pack-destination /tmp     # → /tmp/withone-mastra-0.0.0.tgz
@@ -160,8 +168,10 @@ Use the example app, which registers `oneTrigger` on `/one/events` and an `issue
 
 ```bash
 cd <repo>/examples/studio
+cp ../../.env .env                                   # the example app reads its own .env
+echo 'ONE_RELAY_SECRET=local-test-secret' >> .env
 pnpm install --ignore-workspace
-ONE_RELAY_SECRET=local-test-secret npx mastra dev     # stop the step-4 server first (port 4111)
+npx mastra dev                                       # stop the step-4 server first (port 4111)
 ```
 
 Then, in another terminal:
