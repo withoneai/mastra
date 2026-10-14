@@ -88,7 +88,7 @@ The package isn't on npm yet, so build a tarball and point `init` at it.
 pnpm build && pnpm pack --pack-destination /tmp     # → /tmp/withone-mastra-0.0.0.tgz
 mkdir -p ~/one-mastra-test && cd ~/one-mastra-test
 node <path-to-repo>/dist/cli.js init my-agent \
-  --platforms linear,cal-com,7-shifts \
+  --platforms linear,cal-com,gemini \
   --package /tmp/withone-mastra-0.0.0.tgz -y
 ```
 
@@ -97,7 +97,7 @@ node <path-to-repo>/dist/cli.js init my-agent \
 ```
 ✓ Signed in to One as … (test, https://development-api.withone.ai)
 ✓ Found N connections across M apps
-  note: not connected yet: 7-shifts; …          (only if you list an app you don't have)
+  note: not connected yet: gemini; …          (only if you list an app you don't have)
 ✓ Created a Mastra project with create-mastra
 ✓ Wrote src/mastra/agents/one-agent.ts
 ✓ Updated src/mastra/index.ts (imports, agent, Studio provider)
@@ -127,15 +127,15 @@ Open `http://localhost:4111`.
    ```bash
    curl -s localhost:4111/api/agents/one-agent | python3 -c "import json,sys;print(list(json.load(sys.stdin)['tools']))"
    ```
-   You should see `connect_7_shifts`, plus tools for your other apps. Large apps such as Linear and Cal.com get `one_find_actions` / `one_get_action` / `one_run_action`.
+   You should see `connect_gemini`, plus tools for your other apps. Large apps such as Linear and Cal.com get `one_find_actions` / `one_get_action` / `one_run_action`.
 3. Run a tool through Mastra's own API:
    ```bash
    curl -s -X POST localhost:4111/api/agents/one-agent/tools/one_find_actions/execute \
      -H 'content-type: application/json' -d '{"data":{"platform":"linear","query":"list issues"}}'
-   curl -s -X POST localhost:4111/api/agents/one-agent/tools/connect_7_shifts/execute \
+   curl -s -X POST localhost:4111/api/agents/one-agent/tools/connect_gemini/execute \
      -H 'content-type: application/json' -d '{"data":{}}'
    ```
-   The first returns ranked Linear actions with "List Issues" first. The second returns `{"connectRequired":true,…,"url":"https://development.withone.ai/?env=test#open=7-shifts"}`.
+   The first returns ranked Linear actions with "List Issues" first. The second returns `{"connectRequired":true,…,"url":"https://development.withone.ai/?env=test#open=gemini"}`.
 
 ## 5. One in Studio's agent editor (no code)
 
@@ -160,7 +160,7 @@ Add `ANTHROPIC_API_KEY=…` to `my-agent/.env` and restart `npm run dev`. In Stu
 
 > What are the three most recent issues in Linear?
 
-**Expect:** tool calls `one_find_actions` → `one_get_action` → `one_run_action`, then an answer naming real issues. Then ask for something on an app you haven't connected (e.g. 7shifts). The agent calls `connect_7_shifts` and gives you the link.
+**Expect:** tool calls `one_find_actions` → `one_get_action` → `one_run_action`, then an answer naming real issues. Then ask for something on an app you haven't connected (e.g. Gemini). The agent calls `connect_gemini` and gives you the link.
 
 ## 7. Trigger a workflow with a signed event
 
