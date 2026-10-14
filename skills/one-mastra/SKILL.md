@@ -38,11 +38,9 @@ export const agent = new Agent({
 ## Per-user access (One Connect)
 
 ```ts
-import { createOneConnect } from '@withone/connect/server'
-const oneConnect = createOneConnect({ /* clientId, clientSecret, redirectUri, connectKey, userStore */ })
-
+// Users connect via @withone/connect's routes; its userStore saves one reference per user.
 oneTools({
-  connect: oneConnect,
+  connect: { connectKey: process.env.ONE_CONNECT_KEY!, loadUser: (id) => userStore.loadUser(id) },
   userId: ({ requestContext }) => requestContext.get('userId'),
   connectUrl: ({ platform }) => `/api/one/authorize#one_connector=${platform}`,
   platforms: { gmail: true },

@@ -11,4 +11,6 @@ export type {
 } from './client.js'
 export { toToolInputSchema } from './schema.js'
 export { isWriteAction, toolIdFor } from './names.js'
+export { parseUserReference } from './backend.js'
+export type { OneConnectKey, OneConnectLike } from './backend.js'
 export type { ApprovalRule } from './names.js'

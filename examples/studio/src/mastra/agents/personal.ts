@@ -1,10 +1,10 @@
 import { Agent } from '@mastra/core/agent'
 import { oneTools } from '@withone/mastra'
-import { authorizeUrl, oneConnect } from '../one-connect'
+import { authorizeUrl, oneConnectKey } from '../one-connect'
 
 // Acts for whichever end user the request names (`requestContext.userId`), with only the
 // access that user granted your Connect app.
-export const personalAgent = oneConnect
+export const personalAgent = oneConnectKey
   ? new Agent({
       id: 'personal',
       name: 'Personal assistant (One Connect)',
@@ -15,7 +15,7 @@ export const personalAgent = oneConnect
       // Discover mode takes several steps (find → get → run → answer); Mastra's API default of 5 is too few.
       defaultOptions: { maxSteps: 15 },
       tools: oneTools({
-        connect: oneConnect,
+        connect: oneConnectKey,
         userId: ({ requestContext }) => requestContext?.get('userId'),
         connectUrl: ({ platform, userId }) => (userId ? authorizeUrl(userId, platform) : undefined),
         platforms: Object.fromEntries(

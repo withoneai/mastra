@@ -2,7 +2,18 @@ import { createTool } from '@mastra/core/tools'
 import type { ToolsInput } from '@mastra/core/agent'
 import type { RequestContext } from '@mastra/core/request-context'
 import { DEFAULT_BASE_URL, OneClient, resolveAppUrl, type OneAction, type OneActionKnowledge } from './client.js'
-import { connectBackend, secretBackend, type Backend, type BackendConnection, type OneConnectLike, type RunResult } from './backend.js'
+import {
+  connectBackend,
+  connectKeyBackend,
+  isConnectKey,
+  parseUserReference,
+  secretBackend,
+  type Backend,
+  type BackendConnection,
+  type OneConnectKey,
+  type OneConnectLike,
+  type RunResult,
+} from './backend.js'
 import { approvalNeeded, matchesAny, toolIdFor, uniqueId, type ApprovalRule } from './names.js'
 import { OPEN_INPUT_SCHEMA, toToolInputSchema } from './schema.js'
 import { TtlCache, mapLimit } from './util.js'
@@ -34,10 +45,11 @@ export interface OneToolsOptions {
   /** Defaults to `process.env.ONE_BASE_URL` or `https://api.withone.ai`. */
   baseUrl?: string
   /**
-   * A One Connect client (`createOneConnect` from `@withone/connect/server`), when tools
-   * act for each of your end users with the access they granted. Requires `userId`.
+   * One Connect, when tools act for each of your end users with the access they granted. Requires `userId`.
+   * Either `{ connectKey, loadUser }` (no extra dependency: `loadUser` returns the reference your
+   * `@withone/connect` user store saved), or a `createOneConnect` client from `@withone/connect/server`.
    */
-  connect?: OneConnectLike
+  connect?: OneConnectKey | OneConnectLike
   /** Which end user this request is for. Required with `connect`. */
   userId?: (args: ResolveArgs) => string | undefined
   /**
@@ -84,6 +96,10 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
   const client = options.connect
     ? undefined
     : new OneClient({ secret: options.secret ?? process.env.ONE_SECRET ?? '', baseUrl: options.baseUrl ?? process.env.ONE_BASE_URL, fetch: options.fetch })
+  const connectKey = isConnectKey(options.connect) ? options.connect : undefined
+  const connectClient = connectKey
+    ? new OneClient({ secret: connectKey.connectKey, baseUrl: connectKey.baseUrl ?? DEFAULT_BASE_URL, fetch: options.fetch })
+    : undefined
 
   const ttl = options.cacheTtlMs ?? DEFAULT_TTL
   const maxTools = options.maxToolsPerPlatform ?? DEFAULT_MAX_TOOLS
@@ -116,7 +132,12 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
         warn('no userId for this request; One tools are disabled for it')
         return {}
       }
-      backend = connectBackend(options.connect, userId)
+      if (connectKey) {
+        const reference = await connectKey.loadUser(userId)
+        backend = connectKeyBackend(connectClient!, reference ? parseUserReference(reference) : null, userId)
+      } else {
+        backend = connectBackend(options.connect as OneConnectLike, userId)
+      }
     } else {
       backend = secretBackend(client!)
     }

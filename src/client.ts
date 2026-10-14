@@ -84,6 +84,10 @@ export interface OneActionKnowledge {
 export interface RequestScope {
   /** End-user id for One Connect grant keys (`X-One-Connect-User-Id`). */
   connectUserId?: string
+  /** The organization a Connect grant was made from (`X-One-Organization-Id`). */
+  organizationId?: string
+  /** The project a Connect grant was made from (`X-One-Project-Id`). */
+  projectId?: string
 }
 
 export interface ExecuteRequest extends RequestScope {
@@ -131,6 +135,8 @@ export class OneClient {
       'x-one-source': 'mastra',
     }
     if (scope?.connectUserId) h['x-one-connect-user-id'] = scope.connectUserId
+    if (scope?.organizationId) h['x-one-organization-id'] = scope.organizationId
+    if (scope?.projectId) h['x-one-project-id'] = scope.projectId
     return h
   }
 
@@ -216,9 +222,34 @@ export class OneClient {
     return this.secret.startsWith('sk_test_') ? 'test' : 'live'
   }
 
-  async searchActions(platform: string, query: string, limit = 5): Promise<OneAction[]> {
+  async searchActions(platform: string, query: string, limit = 5, scope?: RequestScope): Promise<OneAction[]> {
     const q = new URLSearchParams({ query, limit: String(limit) })
-    return this.getJson<OneAction[]>(`/available-actions/search/${encodeURIComponent(platform)}?${q}`)
+    if (scope?.connectUserId) q.set('executeAgent', 'true')
+    const res = await this.getJson<OneAction[] | { rows: OneAction[] }>(`/available-actions/search/${encodeURIComponent(platform)}?${q}`, scope)
+    return Array.isArray(res) ? res : res.rows
+  }
+
+  /** The connections a One Connect grant reaches. */
+  async reachableConnections(scope: RequestScope, limit?: number): Promise<Array<{ key: string; platform: string; title?: string }>> {
+    const res = await this.getJson<{ rows?: Array<{ key: string; platform: string; title?: string }> }>(
+      `/connections/reachable${limit ? `?limit=${limit}` : ''}`,
+      scope,
+    )
+    return res.rows ?? []
+  }
+
+  /** A platform's actions from the knowledge base (which a Connect grant can read), with their schemas. */
+  async listKnowledge(platform: string, scope?: RequestScope, max = 2000): Promise<OneActionKnowledge[]> {
+    const out: OneActionKnowledge[] = []
+    for (let page = 1; out.length < max; page++) {
+      const res = await this.getJson<{ rows?: OneActionKnowledge[]; pages?: number }>(
+        `/knowledge?connectionPlatform=${encodeURIComponent(platform)}&limit=100&page=${page}`,
+        scope,
+      )
+      out.push(...(res.rows ?? []))
+      if (!res.rows?.length || page >= (res.pages ?? 1)) break
+    }
+    return out.slice(0, max)
   }
 
   /**
@@ -236,8 +267,8 @@ export class OneClient {
     return JSON.parse(text) as FoundActions[]
   }
 
-  async getKnowledge(actionId: string): Promise<OneActionKnowledge> {
-    const res = await this.getJson<{ rows: OneActionKnowledge[] }>(`/knowledge?_id=${encodeURIComponent(actionId)}`)
+  async getKnowledge(actionId: string, scope?: RequestScope): Promise<OneActionKnowledge> {
+    const res = await this.getJson<{ rows: OneActionKnowledge[] }>(`/knowledge?_id=${encodeURIComponent(actionId)}`, scope)
     const row = res.rows[0]
     if (!row) throw new OneApiError(404, '', `One action ${actionId} not found`)
     return row

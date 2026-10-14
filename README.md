@@ -54,18 +54,19 @@ export const opsAgent = new Agent({
 ### Per-user access with One Connect
 
 ```ts
-import { createOneConnect } from '@withone/connect/server'
-
-const oneConnect = createOneConnect({ clientId, clientSecret, redirectUri, connectKey, userStore })
-
 oneTools({
-  connect: oneConnect,
+  connect: {
+    connectKey: process.env.ONE_CONNECT_KEY!,          // the Connect app's key (production only)
+    loadUser: (userId) => userStore.loadUser(userId),  // the reference saved when the user connected
+  },
   userId: ({ requestContext }) => requestContext.get('userId'),
   connectUrl: ({ platform }) => `/api/one/authorize#one_connector=${platform}`,
   platforms: { gmail: true, slack: true },
 })
 // agent.generate(msg, { requestContext: new RequestContext([['userId', user.id]]) })
 ```
+
+Users connect through your app's authorize and callback routes, which `@withone/connect` provides (`createOneConnect` + `createOneConnectRoutes`). Its `userStore` saves one reference per user; hand the same `loadUser` to `oneTools`. This package talks to One directly and doesn't depend on `@withone/connect`. Passing a `createOneConnect` client as `connect` also works.
 
 How it behaves:
 
@@ -147,7 +148,7 @@ new Mastra({
 Peer dependencies:
 
 - `@mastra/core >=1.76 <2` and `zod ^3.25 || ^4`
-- optional: `@mastra/editor` (Studio provider) and `@withone/connect` (per-user mode)
+- optional: `@mastra/editor` (Studio provider)
 
 Node ≥ 22.13.
 

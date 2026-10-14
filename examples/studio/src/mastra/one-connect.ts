@@ -23,6 +23,11 @@ const writeStore = (users: Record<string, string>) => writeFileSync(STORE, JSON.
 
 const REDIRECT_URI = process.env.ONE_REDIRECT_URI ?? 'http://localhost:4111/one/callback'
 
+/** What `oneTools` needs for per-user mode: the connect key, and each user's stored One reference. */
+export const oneConnectKey = configured
+  ? { connectKey: process.env.ONE_CONNECT_KEY!, loadUser: async (userId: string) => readStore()[userId] ?? null }
+  : undefined
+
 export const oneConnect = configured
   ? createOneConnect({
       clientId: process.env.ONE_CLIENT_ID!,
