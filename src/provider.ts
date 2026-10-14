@@ -142,14 +142,29 @@ export class OneToolProvider extends BaseToolProvider {
 
   async resolveToolsVNext(opts: ResolveToolsOpts): Promise<Record<string, ToolAction<any, any, any>>> {
     if (opts.toolSlugs.length === 0) return {}
-    const platform = opts.toolkit ?? (await this.platformOfSlug(opts.toolSlugs[0]!))
-    if (!platform) return {}
-    const connectionKey = await this.connectionKeyFor(opts.connectionId, platform)
-    if (!connectionKey) throw new Error(`[one] no operational "${platform}" connection for ${opts.connectionId}`)
     const descriptions = Object.fromEntries(
       Object.entries(opts.toolMeta ?? {}).flatMap(([slug, meta]) => (meta.description ? [[slug, meta.description]] : [])),
     )
-    return this.buildTools(platform, opts.toolSlugs, { connectionKey, descriptions })
+    // Agents saved without a pinned connection (Mastra's legacy `resolveTools` path) arrive with an
+    // empty connectionId and slugs from any number of platforms.
+    const byPlatform = new Map<string, string[]>()
+    for (const slug of opts.toolSlugs) {
+      const platform = opts.toolkit ?? (await this.platformOfSlug(slug))
+      if (platform) byPlatform.set(platform, [...(byPlatform.get(platform) ?? []), slug])
+    }
+    const out: Record<string, ToolAction<any, any, any>> = {}
+    for (const [platform, slugs] of byPlatform) {
+      const connectionKey = opts.connectionId
+        ? await this.connectionKeyFor(opts.connectionId, platform)
+        : await this.defaultConnectionKey(platform)
+      if (!connectionKey) {
+        if (opts.connectionId) throw new Error(`[one] no operational "${platform}" connection for ${opts.connectionId}`)
+        console.warn(`[@withone/mastra] no operational "${platform}" connection; skipping ${slugs.join(', ')}`)
+        continue
+      }
+      Object.assign(out, await this.buildTools(platform, slugs, { connectionKey, descriptions }))
+    }
+    return out
   }
 
   async authorize(opts: AuthorizeOpts): Promise<{ url: string; authId: string }> {
@@ -283,6 +298,12 @@ export class OneToolProvider extends BaseToolProvider {
       }) as ToolAction<any, any, any>
     })
     return out
+  }
+
+  /** With no pinned connection, use the platform's first operational one, as `oneTools` does. */
+  private async defaultConnectionKey(platform: string): Promise<string | undefined> {
+    const list = await this.client.listConnections({ platform })
+    return list.find((c) => c.state === 'operational' && c.active !== false)?.key
   }
 
   /** A pinned connection id is either a One connection key or an auth id from `authorize`. */

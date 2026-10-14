@@ -128,6 +128,21 @@ describe('OneToolProvider', () => {
     expect(call.method).toBe('POST')
   })
 
+  it('resolves an agent saved without a pinned connection through the legacy resolveTools path', async () => {
+    const fake = fakeOne()
+    const tools = (await make(fake).resolveTools(['linear_list_issues'], { linear_list_issues: { description: 'POST /graphql' } })) as any
+    expect(Object.keys(tools)).toEqual(['linear_list_issues'])
+    await tools.linear_list_issues.execute({ body: { query: '{ x }' } }, {})
+    const call = fake.requests.find((r) => r.url.pathname === '/v1/passthrough/graphql')!
+    expect(call).toBeDefined()
+  })
+
+  it('skips, rather than fails, unpinned tools for a platform with no operational connection', async () => {
+    const fake = fakeOne()
+    fake.connections.splice(0, 1)
+    expect(await make(fake).resolveTools(['linear_list_issues'])).toEqual({})
+  })
+
   it('refuses to resolve against a failed connection', async () => {
     const provider = make(fakeOne())
     await expect(
