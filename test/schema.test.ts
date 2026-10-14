@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { toToolInputSchema } from '../src/schema.js'
-import { fillPath } from '../src/client.js'
+import { fillPath, resolveAppUrl } from '../src/client.js'
 import { matchesAny, toolIdFor, uniqueId } from '../src/names.js'
 
 describe('toToolInputSchema', () => {
@@ -105,5 +105,20 @@ describe('fillPath', () => {
     expect(fillPath('/event-types/{{eventTypeId}}', { eventTypeId: 'a b' })).toBe('/event-types/a%20b')
     expect(fillPath('/repos/{owner}/{repo}', { owner: 'o', repo: 'r' })).toBe('/repos/o/r')
     expect(fillPath('/x/{{missing}}', {})).toBe('/x/{{missing}}')
+  })
+})
+
+describe('resolveAppUrl', () => {
+  it('pairs the dashboard with the API host, with explicit and env overrides', () => {
+    const prev = process.env.ONE_APP_URL
+    delete process.env.ONE_APP_URL
+    expect(resolveAppUrl('https://development-api.withone.ai')).toBe('https://development.withone.ai')
+    expect(resolveAppUrl('https://api.withone.ai')).toBe('https://app.withone.ai')
+    expect(resolveAppUrl('http://localhost:5005')).toBe('https://app.withone.ai')
+    expect(resolveAppUrl('https://development-api.withone.ai', 'http://localhost:4202/')).toBe('http://localhost:4202')
+    process.env.ONE_APP_URL = 'https://custom.example'
+    expect(resolveAppUrl('https://development-api.withone.ai')).toBe('https://custom.example')
+    if (prev === undefined) delete process.env.ONE_APP_URL
+    else process.env.ONE_APP_URL = prev
   })
 })

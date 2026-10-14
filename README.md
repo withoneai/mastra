@@ -140,7 +140,7 @@ new Mastra({
 |---|---|
 | `ONE_SECRET` | everything (secret-key mode) |
 | `ONE_BASE_URL` | a non-production One API, e.g. `https://development-api.withone.ai` |
-| `ONE_APP_URL` | One dashboard origin for connect links (default `https://app.withone.ai`) |
+| `ONE_APP_URL` | One dashboard origin for connect links (default: `https://development.withone.ai` for the dev API, else `https://app.withone.ai`) |
 | `ONE_RELAY_SECRET` | `oneTrigger` |
 
 Peer dependencies:
@@ -154,7 +154,7 @@ Node ≥ 22.13.
 
 ```bash
 pnpm install
-pnpm test            # 52 offline tests against fake One / Connect APIs, plus real Mastra workflows
+pnpm test            # 53 offline tests against fake One / Connect APIs, plus real Mastra workflows
 pnpm typecheck
 pnpm build
 

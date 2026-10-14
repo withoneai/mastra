@@ -14,7 +14,7 @@ import type {
   ToolProviderToolkit,
 } from '@mastra/core/tool-provider'
 import type { ToolAction } from '@mastra/core/tools'
-import { OneClient, type OneAction, type OneConnection, type OneConnector } from './client.js'
+import { OneClient, resolveAppUrl, type OneAction, type OneConnection, type OneConnector } from './client.js'
 import { matchesAny } from './names.js'
 import { actionTool, catalogToolIds, truncateFor } from './tools.js'
 import { secretBackend, type Backend } from './backend.js'
@@ -25,7 +25,7 @@ export interface OneToolProviderOptions extends BaseToolProviderOptions {
   secret?: string
   /** Defaults to `process.env.ONE_BASE_URL` or `https://api.withone.ai`. */
   baseUrl?: string
-  /** One dashboard origin used for the Connect flow. Defaults to `process.env.ONE_APP_URL` or `https://app.withone.ai`. */
+  /** One dashboard origin for the Connect flow. Defaults to `ONE_APP_URL`, else the dashboard paired with the API. */
   appUrl?: string
   /** Tool-id globs that require approval before running. */
   requireApproval?: string[]
@@ -89,7 +89,7 @@ export class OneToolProvider extends BaseToolProvider {
       fetch: options.fetch,
     })
     this.backend = secretBackend(this.client)
-    this.appUrl = (options.appUrl ?? process.env.ONE_APP_URL ?? 'https://app.withone.ai').replace(/\/+$/, '')
+    this.appUrl = resolveAppUrl(this.client.baseUrl, options.appUrl)
     this.approvals = options.requireApproval ?? []
     this.truncate = truncateFor(options.maxResultChars ?? 30_000)
     this.catalogs = new TtlCache(options.cacheTtlMs ?? DEFAULT_TTL)

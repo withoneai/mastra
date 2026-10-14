@@ -1,7 +1,7 @@
 import { createTool } from '@mastra/core/tools'
 import type { ToolsInput } from '@mastra/core/agent'
 import type { RequestContext } from '@mastra/core/request-context'
-import { OneClient, type OneAction, type OneActionKnowledge } from './client.js'
+import { DEFAULT_BASE_URL, OneClient, resolveAppUrl, type OneAction, type OneActionKnowledge } from './client.js'
 import { connectBackend, secretBackend, type Backend, type BackendConnection, type OneConnectLike, type RunResult } from './backend.js'
 import { matchesAny, toolIdFor, uniqueId } from './names.js'
 import { OPEN_INPUT_SCHEMA, toToolInputSchema } from './schema.js'
@@ -46,7 +46,7 @@ export interface OneToolsOptions {
    * to One's dashboard when using a secret key. Return `undefined` to skip.
    */
   connectUrl?: (args: { platform: string; userId?: string }) => string | undefined
-  /** One dashboard origin for the default connect link. Defaults to `process.env.ONE_APP_URL` or `https://app.withone.ai`. */
+  /** One dashboard origin for the default connect link. Defaults to `ONE_APP_URL`, else the dashboard paired with the API (`development.withone.ai` for the dev API, `app.withone.ai` otherwise). */
   appUrl?: string
   /** Above this many matching actions a platform switches to discover mode. Default 40. */
   maxToolsPerPlatform?: number
@@ -96,7 +96,7 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
     report(m)
   }
 
-  const appUrl = (options.appUrl ?? process.env.ONE_APP_URL ?? 'https://app.withone.ai').replace(/\/+$/, '')
+  const appUrl = resolveAppUrl(client?.baseUrl ?? DEFAULT_BASE_URL, options.appUrl)
   const connectUrl =
     options.connectUrl ??
     (client ? ({ platform }: { platform: string }) => `${appUrl}/?env=${client.environment}#open=${encodeURIComponent(platform)}` : () => undefined)

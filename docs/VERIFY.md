@@ -21,7 +21,7 @@ pnpm install
 pnpm typecheck && pnpm test
 ```
 
-**Expect:** no type errors and `Tests 52 passed (52)`. These run against fake One and One Connect APIs, with real Mastra agents and workflows (in-memory storage). One test also checks the real `@withone/connect` client against the interface.
+**Expect:** no type errors and `Tests 53 passed (53)`. These run against fake One and One Connect APIs, with real Mastra agents and workflows (in-memory storage). One test also checks the real `@withone/connect` client against the interface.
 
 ## 2. Live checks against your One account (read-only)
 
@@ -61,7 +61,7 @@ pnpm smoke:provider
 - `health { ok: true … }`, ~996 toolkits, and Linear's list-issues search.
 - Your Linear connections listed, with `getConnectionStatus` returning `connected: true` for a real key and `false` for a fake one.
 - `execute → 200` with real issues.
-- `authorize` returns a `https://app.withone.ai/?env=…#open=linear` URL.
+- `authorize` returns a `https://development.withone.ai/?env=test#open=linear` URL (`app.withone.ai` on production).
 - `getAuthStatus` reports `pending`, and `failed` for an unknown id.
 
 ```bash
@@ -135,7 +135,7 @@ Open `http://localhost:4111`.
    curl -s -X POST localhost:4111/api/agents/one-agent/tools/connect_7_shifts/execute \
      -H 'content-type: application/json' -d '{"data":{}}'
    ```
-   The first returns ranked Linear actions with "List Issues" first. The second returns `{"connectRequired":true,…,"url":"https://app.withone.ai/?env=test#open=7-shifts"}`.
+   The first returns ranked Linear actions with "List Issues" first. The second returns `{"connectRequired":true,…,"url":"https://development.withone.ai/?env=test#open=7-shifts"}`.
 
 ## 5. One in Studio's agent editor (no code)
 

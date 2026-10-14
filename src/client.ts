@@ -1,4 +1,22 @@
 export const DEFAULT_BASE_URL = 'https://api.withone.ai'
+export const DEFAULT_APP_URL = 'https://app.withone.ai'
+
+const APP_URL_FOR_API: Record<string, string> = {
+  'api.withone.ai': DEFAULT_APP_URL,
+  'development-api.withone.ai': 'https://development.withone.ai',
+}
+
+/** One dashboard origin for an API base: explicit value, then `ONE_APP_URL`, then the dashboard paired with the API host. */
+export function resolveAppUrl(baseUrl: string, explicit?: string): string {
+  const fromHost = (() => {
+    try {
+      return APP_URL_FOR_API[new URL(baseUrl).host]
+    } catch {
+      return undefined
+    }
+  })()
+  return (explicit ?? process.env.ONE_APP_URL ?? fromHost ?? DEFAULT_APP_URL).replace(/\/+$/, '')
+}
 
 export interface OneClientOptions {
   secret: string
