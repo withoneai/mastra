@@ -25,7 +25,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "skills",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=22.13.0"
@@ -61,5 +63,8 @@
     "@mastra/editor": {
       "optional": true
     }
+  },
+  "bin": {
+    "withone-mastra": "./dist/cli.js"
   }
 }

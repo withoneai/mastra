@@ -40,6 +40,6 @@ const ran = await tools.one_run_action.execute(
 console.log('one_run_action →', ran.status, JSON.stringify(ran.data).slice(0, 300))
 
 // Mastra accepts the resolver as an agent's dynamic `tools`.
-const agent = new Agent({ id: 'smoke', name: 'smoke', instructions: 'test', model: 'anthropic/claude-sonnet-4-5', tools: resolve })
+const agent = new Agent({ id: 'smoke', name: 'smoke', instructions: 'test', model: 'anthropic/claude-sonnet-5-5', tools: resolve })
 const listed = await agent.listTools()
 console.log('\nagent.listTools() →', Object.keys(listed).length, 'tools')

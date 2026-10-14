@@ -12,7 +12,7 @@ export const opsAgent = new Agent({
   id: 'ops',
   name: 'Ops copilot',
   instructions: 'Help the user run operations across their apps.',
-  model: 'anthropic/claude-sonnet-4-5',
+  model: 'anthropic/claude-sonnet-5-5',
   tools: oneTools({
     platforms: {
       'cal-com': true,
