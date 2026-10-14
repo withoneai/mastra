@@ -105,7 +105,11 @@ export interface ExecuteResult {
 }
 
 export class OneApiError extends Error {
-  constructor(readonly status: number, readonly body: string, message?: string) {
+  constructor(
+    readonly status: number,
+    readonly body: string,
+    message?: string,
+  ) {
     super(message ?? `One API ${status}: ${body.slice(0, 300)}`)
     this.name = 'OneApiError'
   }
@@ -225,7 +229,10 @@ export class OneClient {
   async searchActions(platform: string, query: string, limit = 5, scope?: RequestScope): Promise<OneAction[]> {
     const q = new URLSearchParams({ query, limit: String(limit) })
     if (scope?.connectUserId) q.set('executeAgent', 'true')
-    const res = await this.getJson<OneAction[] | { rows: OneAction[] }>(`/available-actions/search/${encodeURIComponent(platform)}?${q}`, scope)
+    const res = await this.getJson<OneAction[] | { rows: OneAction[] }>(
+      `/available-actions/search/${encodeURIComponent(platform)}?${q}`,
+      scope,
+    )
     return Array.isArray(res) ? res : res.rows
   }
 

@@ -26,7 +26,7 @@ export function patchMastraIndex(input: string): PatchResult {
       source,
       changes,
       manual: [
-        "add `oneAgent` to your Mastra agents and `editor: new MastraEditor({ toolProviders: { one: new OneToolProvider() } })` to `new Mastra({ … })`",
+        'add `oneAgent` to your Mastra agents and `editor: new MastraEditor({ toolProviders: { one: new OneToolProvider() } })` to `new Mastra({ … })`',
       ],
     }
   }
@@ -64,7 +64,9 @@ export function patchMastraIndex(input: string): PatchResult {
   }
 
   if (!/\bstorage\s*:/.test(source)) {
-    manual.push("Studio's editor stores connections, so give Mastra a `storage` (e.g. `new LibSQLStore({ id: 'mastra', url: 'file:./mastra.db' })`)")
+    manual.push(
+      "Studio's editor stores connections, so give Mastra a `storage` (e.g. `new LibSQLStore({ id: 'mastra', url: 'file:./mastra.db' })`)",
+    )
   }
 
   return { source, changes, manual }

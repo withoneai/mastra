@@ -6,13 +6,13 @@ Give [Mastra](https://mastra.ai) agents and workflows every app connected throug
 
 ![One in Mastra Studio's tool picker](docs/screenshots/studio-one-linear-tools.png)
 
-| Entry point | What it does |
-|---|---|
-| `oneTools()` from `@withone/mastra` | An agent's `tools`: one typed tool per One action, per request |
+| Entry point                                       | What it does                                                                           |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `oneTools()` from `@withone/mastra`               | An agent's `tools`: one typed tool per One action, per request                         |
 | `OneToolProvider` from `@withone/mastra/provider` | One in Mastra Studio's agent editor: browse apps, connect, attach actions without code |
-| `oneStep()` from `@withone/mastra/workflows` | A One action as a workflow step, optionally paused for human approval |
-| `oneTrigger()` from `@withone/mastra/triggers` | A Mastra route that starts a workflow from One webhook-relay events |
-| `npx @withone/mastra init` | Wires all of the above into a new or existing Mastra project |
+| `oneStep()` from `@withone/mastra/workflows`      | A One action as a workflow step, optionally paused for human approval                  |
+| `oneTrigger()` from `@withone/mastra/triggers`    | A Mastra route that starts a workflow from One webhook-relay events                    |
+| `npx @withone/mastra init`                        | Wires all of the above into a new or existing Mastra project                           |
 
 ## Quick start
 
@@ -56,8 +56,8 @@ export const opsAgent = new Agent({
 ```ts
 oneTools({
   connect: {
-    connectKey: process.env.ONE_CONNECT_KEY!,          // the Connect app's key (production only)
-    loadUser: (userId) => userStore.loadUser(userId),  // the reference saved when the user connected
+    connectKey: process.env.ONE_CONNECT_KEY!, // the Connect app's key (production only)
+    loadUser: (userId) => userStore.loadUser(userId), // the reference saved when the user connected
   },
   userId: ({ requestContext }) => requestContext.get('userId'),
   connectUrl: ({ platform }) => `/api/one/authorize#one_connector=${platform}`,
@@ -138,12 +138,12 @@ new Mastra({
 
 ## Configuration
 
-| Variable | Used by |
-|---|---|
-| `ONE_SECRET` | everything (secret-key mode) |
-| `ONE_BASE_URL` | a non-production One API, e.g. `https://development-api.withone.ai` |
-| `ONE_APP_URL` | One dashboard origin for connect links (default: `https://development.withone.ai` for the dev API, else `https://app.withone.ai`) |
-| `ONE_RELAY_SECRET` | `oneTrigger` |
+| Variable           | Used by                                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `ONE_SECRET`       | everything (secret-key mode)                                                                                                      |
+| `ONE_BASE_URL`     | a non-production One API, e.g. `https://development-api.withone.ai`                                                               |
+| `ONE_APP_URL`      | One dashboard origin for connect links (default: `https://development.withone.ai` for the dev API, else `https://app.withone.ai`) |
+| `ONE_RELAY_SECRET` | `oneTrigger`                                                                                                                      |
 
 Peer dependencies:
 

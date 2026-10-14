@@ -68,7 +68,9 @@ describe('toToolInputSchema', () => {
   it('does not require a part with no required fields', () => {
     const out = toToolInputSchema({
       type: 'object',
-      properties: { body: { type: 'object', properties: { connectionKey: { type: 'string' }, q: { type: 'string' } }, required: ['connectionKey'] } },
+      properties: {
+        body: { type: 'object', properties: { connectionKey: { type: 'string' }, q: { type: 'string' } }, required: ['connectionKey'] },
+      },
       required: ['body'],
     })
     expect(out?.schema.required).toBeUndefined()

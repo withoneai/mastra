@@ -37,4 +37,11 @@ console.log('resume(approved) →', resumed.status, JSON.stringify((resumed as a
 const declinedRun = await wf.createRun()
 await declinedRun.start({ inputData: { first: 1 } })
 const declined = await declinedRun.resume({ step: listIssues, resumeData: { approved: false, note: 'not now' } })
-console.log('resume(declined) →', declined.status, 'result:', JSON.stringify((declined as any).result), '| profile step ran:', Boolean((declined as any).steps?.[profile.id]))
+console.log(
+  'resume(declined) →',
+  declined.status,
+  'result:',
+  JSON.stringify((declined as any).result),
+  '| profile step ran:',
+  Boolean((declined as any).steps?.[profile.id]),
+)

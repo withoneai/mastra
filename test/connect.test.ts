@@ -54,7 +54,11 @@ describe('oneTools with One Connect', () => {
     await alice.gmail_send_email.execute({ body: { to: 'x@y.z' } }, {})
     expect(runs[0]).toEqual({
       userId: 'alice',
-      input: expect.objectContaining({ connectionKey: 'live::gmail::default::alice', actionId: 'conn_mod_def::send', body: { to: 'x@y.z' } }),
+      input: expect.objectContaining({
+        connectionKey: 'live::gmail::default::alice',
+        actionId: 'conn_mod_def::send',
+        body: { to: 'x@y.z' },
+      }),
     })
 
     const bob = (await resolve(ctx('bob'))) as any
@@ -78,7 +82,12 @@ describe('oneTools with One Connect', () => {
   it('surfaces a call outside the grant without retrying', async () => {
     const { connect, runs } = fakeConnect({ grants: { alice: ['gmail'] }, blocked: true })
     const tools = (await oneTools({ connect, userId, connectUrl, platforms: { gmail: true } })(ctx('alice'))) as any
-    expect(await tools.gmail_send_email.execute({ body: { to: 'x' } }, {})).toMatchObject({ ok: false, status: 403, blockedByGrant: true, refusal: 'grant' })
+    expect(await tools.gmail_send_email.execute({ body: { to: 'x' } }, {})).toMatchObject({
+      ok: false,
+      status: 403,
+      blockedByGrant: true,
+      refusal: 'grant',
+    })
     expect(runs).toHaveLength(1)
   })
 

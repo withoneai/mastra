@@ -1,4 +1,12 @@
-import { OneApiError, type ExecuteResult, type FoundActions, type OneAction, type OneActionKnowledge, type OneClient, type RequestScope } from './client.js'
+import {
+  OneApiError,
+  type ExecuteResult,
+  type FoundActions,
+  type OneAction,
+  type OneActionKnowledge,
+  type OneClient,
+  type RequestScope,
+} from './client.js'
 
 /** A connection the current caller can use. */
 export interface BackendConnection {
@@ -44,12 +52,14 @@ export function secretBackend(client: OneClient): Backend {
   return {
     scope: 'secret',
     connections: async (platform) =>
-      (await client.listConnections({ platform })).filter((c) => c.platform === platform).map((c) => ({
-        key: c.key,
-        platform: c.platform,
-        usable: c.state === 'operational' && c.active !== false,
-        tags: c.tags,
-      })),
+      (await client.listConnections({ platform }))
+        .filter((c) => c.platform === platform)
+        .map((c) => ({
+          key: c.key,
+          platform: c.platform,
+          usable: c.state === 'operational' && c.active !== false,
+          tags: c.tags,
+        })),
     countActions: (platform) => client.countActions(platform),
     listActions: (platform) => client.listActions(platform),
     searchActions: (platform, query, limit) => client.searchActions(platform, query, limit),
@@ -66,14 +76,20 @@ export function secretBackend(client: OneClient): Backend {
  */
 export interface OneConnectLike {
   listConnections(userId: string): Promise<Array<{ key: string; platform: string }>>
-  listActions(userId: string, platform: string): Promise<Array<{ _id: string; title: string; method: string; path: string; tags?: string[] }>>
+  listActions(
+    userId: string,
+    platform: string,
+  ): Promise<Array<{ _id: string; title: string; method: string; path: string; tags?: string[] }>>
   searchActions(
     userId: string,
     platform: string,
     query: string,
     options?: { limit?: number },
   ): Promise<Array<{ _id: string; title: string; method: string; path: string; tags?: string[] }>>
-  getActionKnowledge(userId: string, actionId: string): Promise<{ _id: string; title: string; method: string; path: string; tags?: string[]; knowledge?: string; ioSchema?: unknown }>
+  getActionKnowledge(
+    userId: string,
+    actionId: string,
+  ): Promise<{ _id: string; title: string; method: string; path: string; tags?: string[]; knowledge?: string; ioSchema?: unknown }>
   runAction(
     userId: string,
     input: {

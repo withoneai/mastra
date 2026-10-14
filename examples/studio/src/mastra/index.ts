@@ -13,10 +13,7 @@ export const mastra = new Mastra({
   workflows: { issueDigest },
   server: {
     port: Number(process.env.PORT) || 4111,
-    apiRoutes: [
-      oneTrigger({ path: '/one/events', workflow: 'issueDigest', eventTypes: ['charge.*', 'issue.*'] }),
-      ...oneConnectRoutes,
-    ],
+    apiRoutes: [oneTrigger({ path: '/one/events', workflow: 'issueDigest', eventTypes: ['charge.*', 'issue.*'] }), ...oneConnectRoutes],
   },
   storage: new LibSQLStore({ id: 'studio-example', url: 'file:./mastra.db' }),
   editor: new MastraEditor({

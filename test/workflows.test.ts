@@ -13,7 +13,8 @@ function fakeOne(passthroughStatus = 200) {
   const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
     const url = new URL(String(input))
     calls.push({ url, body: init?.body as string | undefined })
-    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+    const json = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
     const p = url.pathname
     if (p === '/v1/vault/connections') {
       const platform = url.searchParams.get('platform')!
@@ -26,7 +27,18 @@ function fakeOne(passthroughStatus = 200) {
     if (p === '/v1/knowledge') {
       const a = actions.find((x) => x.systemId === url.searchParams.get('_id'))!
       return json({
-        rows: [{ ...a, _id: a.systemId, ioSchema: { inputSchema: { type: 'object', properties: { body: { type: 'object', properties: { amount: { type: 'number' }, text: { type: 'string' } } } } } } }],
+        rows: [
+          {
+            ...a,
+            _id: a.systemId,
+            ioSchema: {
+              inputSchema: {
+                type: 'object',
+                properties: { body: { type: 'object', properties: { amount: { type: 'number' }, text: { type: 'string' } } } },
+              },
+            },
+          },
+        ],
       })
     }
     if (p.startsWith('/v1/passthrough/')) return json(passthroughStatus === 200 ? { id: 're_1' } : { error: 'nope' }, passthroughStatus)
@@ -108,6 +120,8 @@ describe('oneStep', () => {
 
   it('rejects an unknown action at definition time', async () => {
     const fake = fakeOne()
-    await expect(oneStep({ platform: 'stripe', action: 'nope', secret: 'sk_test', fetch: fake.fetchImpl })).rejects.toThrow(/no "stripe" action matches "nope"/)
+    await expect(oneStep({ platform: 'stripe', action: 'nope', secret: 'sk_test', fetch: fake.fetchImpl })).rejects.toThrow(
+      /no "stripe" action matches "nope"/,
+    )
   })
 })

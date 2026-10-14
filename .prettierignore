@@ -1,0 +1,6 @@
+dist
+node_modules
+pnpm-lock.yaml
+examples/*/node_modules
+examples/*/.mastra
+examples/*/pnpm-lock.yaml

@@ -61,7 +61,8 @@ export const oneConnectRoutes = oneConnect
   ? (() => {
       const routes = createOneConnectRoutes(oneConnect, {
         identifyUser: demoUser,
-        onComplete: ({ userId, result }) => console.log(`[one-connect] ${userId}: ${result.outcome}${result.message ? ` (${result.message})` : ''}`),
+        onComplete: ({ userId, result }) =>
+          console.log(`[one-connect] ${userId}: ${result.outcome}${result.message ? ` (${result.message})` : ''}`),
       })
       const handle = async (request: Request, rememberUser: boolean) => {
         const res = await routes.GET(request)

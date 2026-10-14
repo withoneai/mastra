@@ -30,7 +30,13 @@ function fakeOne() {
     const p = url.pathname
 
     if (p === '/v1/available-connectors') {
-      return json({ rows: [{ platform: 'linear', name: 'Linear', title: 'Linear', image: 'l.svg', active: true }, { platform: 'old', name: 'Old', active: false }], pages: 1 })
+      return json({
+        rows: [
+          { platform: 'linear', name: 'Linear', title: 'Linear', image: 'l.svg', active: true },
+          { platform: 'old', name: 'Old', active: false },
+        ],
+        pages: 1,
+      })
     }
     if (p === '/v1/users/whoami') return json({ organization: { id: 'org_1' }, project: null })
     if (p === '/v1/vault/connections' && method === 'GET') {
@@ -38,7 +44,8 @@ function fakeOne() {
       const keys = url.searchParams.get('key')?.split(',')
       const tags = url.searchParams.get('tags')?.split(',')
       const rows = connections.filter(
-        (c) => (!platform || c.platform === platform) && (!keys || keys.includes(c.key)) && (!tags || tags.every((t) => c.tags.includes(t))),
+        (c) =>
+          (!platform || c.platform === platform) && (!keys || keys.includes(c.key)) && (!tags || tags.every((t) => c.tags.includes(t))),
       )
       return json({ rows, pages: 1 })
     }
@@ -56,7 +63,21 @@ function fakeOne() {
     if (p === '/v1/available-actions/linear') return json({ rows: actions, pages: 1, total: actions.length })
     if (p === '/v1/knowledge') {
       const a = actions.find((x) => x.systemId === url.searchParams.get('_id'))!
-      return json({ rows: [{ ...a, _id: a.systemId, ioSchema: { inputSchema: { type: 'object', properties: { body: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } }, required: ['body'] } } }] })
+      return json({
+        rows: [
+          {
+            ...a,
+            _id: a.systemId,
+            ioSchema: {
+              inputSchema: {
+                type: 'object',
+                properties: { body: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+                required: ['body'],
+              },
+            },
+          },
+        ],
+      })
     }
     if (p.startsWith('/v1/passthrough/')) return json({ data: { ok: 1 } })
     return json({ error: p }, 404)
@@ -157,7 +178,12 @@ describe('OneToolProvider', () => {
   it('refuses to resolve against a failed connection', async () => {
     const provider = make(fakeOne())
     await expect(
-      provider.resolveToolsVNext({ toolSlugs: ['linear_list_issues'], toolMeta: {}, connectionId: 'test::linear::default::b', toolkit: 'linear' }),
+      provider.resolveToolsVNext({
+        toolSlugs: ['linear_list_issues'],
+        toolMeta: {},
+        connectionId: 'test::linear::default::b',
+        toolkit: 'linear',
+      }),
     ).rejects.toThrow(/no operational "linear" connection/)
   })
 
@@ -168,14 +194,26 @@ describe('OneToolProvider', () => {
     expect(url).toBe('https://app.test/?env=test&orgId=org_1#open=linear')
     expect(await provider.getAuthStatus(authId)).toBe('pending')
 
-    fake.connections.push({ id: 'u3', key: 'test::linear::default::new', platform: 'linear', state: 'operational', active: true, tags: ['team'] })
+    fake.connections.push({
+      id: 'u3',
+      key: 'test::linear::default::new',
+      platform: 'linear',
+      state: 'operational',
+      active: true,
+      tags: ['team'],
+    })
     expect(await provider.getAuthStatus(authId)).toBe('completed')
     expect(fake.connections.at(-1)!.tags).toEqual(['team', authId])
 
     // A fresh provider (e.g. after a restart) resolves the auth id through the tag.
     const restarted = make(fake)
     expect(await restarted.getAuthStatus(authId)).toBe('completed')
-    const tools = (await restarted.resolveToolsVNext({ toolSlugs: ['linear_list_issues'], toolMeta: {}, connectionId: authId, toolkit: 'linear' })) as any
+    const tools = (await restarted.resolveToolsVNext({
+      toolSlugs: ['linear_list_issues'],
+      toolMeta: {},
+      connectionId: authId,
+      toolkit: 'linear',
+    })) as any
     await tools.linear_list_issues.execute({ body: { query: '{ x }' } }, {})
     const call = fake.requests.filter((r) => r.url.pathname === '/v1/passthrough/graphql').at(-1)!
     expect(call).toBeDefined()

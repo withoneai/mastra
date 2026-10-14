@@ -12,13 +12,18 @@ function fakeOne(opts: { grants: Record<string, string[]>; revoked?: Set<string>
   const actions = [
     { _id: 'conn_mod_def::send', title: 'Send Email', method: 'POST', path: '/gmail/send', tags: [], connectionPlatform: 'gmail' },
     { _id: 'conn_mod_def::list', title: 'List Messages', method: 'GET', path: '/gmail/messages', tags: [], connectionPlatform: 'gmail' },
-  ].map((a) => ({ ...a, knowledge: '## Description\n\nDoes the thing.', ioSchema: { inputSchema: { type: 'object', properties: { body: { type: 'object', properties: { to: { type: 'string' } } } } } } }))
+  ].map((a) => ({
+    ...a,
+    knowledge: '## Description\n\nDoes the thing.',
+    ioSchema: { inputSchema: { type: 'object', properties: { body: { type: 'object', properties: { to: { type: 'string' } } } } } },
+  }))
 
   const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
     const url = new URL(String(input))
     const headers = Object.fromEntries(new Headers(init?.headers).entries())
     calls.push({ path: url.pathname, headers })
-    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+    const json = (body: unknown, status = 200) =>
+      new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
     const bare = (status: number, text: string) => new Response(`${status} ${text}`, { status })
 
     if (headers['x-one-secret'] !== 'sk_live_ck') return bare(401, 'Unauthorized')
@@ -26,7 +31,8 @@ function fakeOne(opts: { grants: Record<string, string[]>; revoked?: Set<string>
     const grant = opts.grants[user]
     if (!grant || opts.revoked?.has(user)) return bare(403, 'Forbidden')
 
-    if (url.pathname === '/v1/connections/reachable') return json({ rows: grant.map((p) => ({ key: `live::${p}::${user.slice(0, 6)}`, platform: p })) })
+    if (url.pathname === '/v1/connections/reachable')
+      return json({ rows: grant.map((p) => ({ key: `live::${p}::${user.slice(0, 6)}`, platform: p })) })
     if (url.pathname === '/v1/knowledge') {
       const id = url.searchParams.get('_id')
       return json({ rows: id ? actions.filter((a) => a._id === id) : actions, pages: 1 })
@@ -82,7 +88,12 @@ describe('One Connect with a connect key (no @withone/connect)', () => {
   it('reports a call outside the grant as blockedByGrant while the consent stands', async () => {
     const fake = fakeOne({ grants: { [ALICE]: ['gmail'] }, outsideGrant: ['/v1/passthrough/gmail/send'] })
     const tools = (await make(fake)(as('alice'))) as any
-    expect(await tools.gmail_send_email.execute({ body: {} }, {})).toMatchObject({ ok: false, status: 403, blockedByGrant: true, refusal: 'grant' })
+    expect(await tools.gmail_send_email.execute({ body: {} }, {})).toMatchObject({
+      ok: false,
+      status: 403,
+      blockedByGrant: true,
+      refusal: 'grant',
+    })
   })
 
   it('returns a reconnect link once the consent is revoked mid-session', async () => {

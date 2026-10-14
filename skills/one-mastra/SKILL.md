@@ -22,8 +22,8 @@ export const agent = new Agent({
   tools: oneTools({
     platforms: {
       stripe: { allowTools: ['stripe_list_*', 'stripe_create_a_refund'], requireApproval: ['stripe_create_*'] },
-      slack: true,          // typed tool per action, or search/run tools if the app has > 40 actions
-      linear: 'discover',   // always search/run tools: one_find_actions, one_get_action, one_run_action
+      slack: true, // typed tool per action, or search/run tools if the app has > 40 actions
+      linear: 'discover', // always search/run tools: one_find_actions, one_get_action, one_run_action
     },
   }),
 })

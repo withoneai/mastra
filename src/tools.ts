@@ -99,7 +99,11 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
   if (options.connect && !options.userId) throw new Error('[@withone/mastra] `connect` needs a `userId` resolver.')
   const client = options.connect
     ? undefined
-    : new OneClient({ secret: options.secret ?? process.env.ONE_SECRET ?? '', baseUrl: options.baseUrl ?? process.env.ONE_BASE_URL, fetch: options.fetch })
+    : new OneClient({
+        secret: options.secret ?? process.env.ONE_SECRET ?? '',
+        baseUrl: options.baseUrl ?? process.env.ONE_BASE_URL,
+        fetch: options.fetch,
+      })
   const connectKey = isConnectKey(options.connect) ? options.connect : undefined
   const connectClient = connectKey
     ? new OneClient({ secret: connectKey.connectKey, baseUrl: connectKey.baseUrl ?? DEFAULT_BASE_URL, fetch: options.fetch })
@@ -119,7 +123,9 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
   const appUrl = resolveAppUrl(client?.baseUrl ?? DEFAULT_BASE_URL, options.appUrl)
   const connectUrl =
     options.connectUrl ??
-    (client ? ({ platform }: { platform: string }) => `${appUrl}/?env=${client.environment}#open=${encodeURIComponent(platform)}` : () => undefined)
+    (client
+      ? ({ platform }: { platform: string }) => `${appUrl}/?env=${client.environment}#open=${encodeURIComponent(platform)}`
+      : () => undefined)
 
   // The catalog and action docs are the same for every caller; connections are per caller.
   const catalogs = new TtlCache<OneAction[]>(ttl)
@@ -183,7 +189,9 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
       if (!all && !hasExplicitSelection(config)) {
         const total = await counts.get(platform, () => backend.countActions(platform))
         if (total > maxTools) {
-          warn(`"${platform}" has ${total} actions; exposing search/run tools instead. Narrow with \`actions\` or \`allowTools\` for typed tools.`)
+          warn(
+            `"${platform}" has ${total} actions; exposing search/run tools instead. Narrow with \`actions\` or \`allowTools\` for typed tools.`,
+          )
           discoverPlatforms.push({ platform, connectionKey: connection.key, config })
           continue
         }
@@ -197,9 +205,16 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
       }
 
       // A whole platform's schemas come in a few pages rather than one request per action.
-      const bulk = all && backend.knowledgeAll ? await platformDocs.get(`${backend.scope}\u0000${platform}`, () => backend.knowledgeAll!(platform)).catch(() => undefined) : undefined
+      const bulk =
+        all && backend.knowledgeAll
+          ? await platformDocs.get(`${backend.scope}\u0000${platform}`, () => backend.knowledgeAll!(platform)).catch(() => undefined)
+          : undefined
       const byId = new Map(bulk?.map((d) => [d._id, d]))
-      const docs = await mapLimit(selected, KNOWLEDGE_CONCURRENCY, async (a) => byId.get(a.action.systemId) ?? getKnowledge(a.action.systemId).catch(() => undefined))
+      const docs = await mapLimit(
+        selected,
+        KNOWLEDGE_CONCURRENCY,
+        async (a) => byId.get(a.action.systemId) ?? getKnowledge(a.action.systemId).catch(() => undefined),
+      )
       selected.forEach(({ action, toolId }, j) => {
         const id = uniqueId(toolId, taken)
         taken.add(id)
@@ -218,7 +233,10 @@ export function oneTools(options: OneToolsOptions): OneToolsResolver {
     }
 
     if (discoverPlatforms.length) {
-      Object.assign(tools, discoverTools(backend, discoverPlatforms, { getKnowledge, truncate, connectUrl: (platform) => connectUrl({ platform, userId }) }))
+      Object.assign(
+        tools,
+        discoverTools(backend, discoverPlatforms, { getKnowledge, truncate, connectUrl: (platform) => connectUrl({ platform, userId }) }),
+      )
     }
     return tools
   }
@@ -276,7 +294,11 @@ function connectTool(id: string, platform: string, url: string) {
   })
 }
 
-function withConnectHint(result: RunResult, platform: string, connectUrl?: () => string | undefined): RunResult & { url?: string; message?: string } {
+function withConnectHint(
+  result: RunResult,
+  platform: string,
+  connectUrl?: () => string | undefined,
+): RunResult & { url?: string; message?: string } {
   if (!result.connectRequired) return result
   const url = connectUrl?.()
   return {
@@ -376,7 +398,8 @@ function discoverTools(
   // An action may only run on a platform this agent enabled, whatever id the model passes.
   const resolveAction = async (actionId: string) => {
     const doc = await ctx.getKnowledge(actionId)
-    const platform = (doc as { connectionPlatform?: string; platform?: string }).connectionPlatform ?? (doc as { platform?: string }).platform
+    const platform =
+      (doc as { connectionPlatform?: string; platform?: string }).connectionPlatform ?? (doc as { platform?: string }).platform
     const entry = platform ? byPlatform.get(platform) : undefined
     return { doc, entry, toolId: entry ? toolIdFor(entry.platform, doc.title) : undefined }
   }
@@ -432,7 +455,8 @@ function discoverTools(
     }),
     one_run_action: createTool({
       id: 'one_run_action',
-      description: 'Run an action found with one_find_actions. Pass path parameters, query parameters and body as described by one_get_action.',
+      description:
+        'Run an action found with one_find_actions. Pass path parameters, query parameters and body as described by one_get_action.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -452,7 +476,8 @@ function discoverTools(
       execute: async ({ actionId, path, query, body }: any) => {
         const { doc, entry, toolId } = await resolveAction(actionId)
         if (!entry || !toolId) return { error: `Action ${actionId} is not on an enabled platform.` }
-        if (entry.config.allowTools?.length && !matchesAny(toolId, entry.config.allowTools)) return { error: `Action "${doc.title}" is not allowed.` }
+        if (entry.config.allowTools?.length && !matchesAny(toolId, entry.config.allowTools))
+          return { error: `Action "${doc.title}" is not allowed.` }
         if (matchesAny(toolId, entry.config.disallowTools)) return { error: `Action "${doc.title}" is not allowed.` }
         const result = await backend.run({
           action: { systemId: doc._id, method: doc.method, path: doc.path, tags: doc.tags },

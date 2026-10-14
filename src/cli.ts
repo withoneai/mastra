@@ -72,20 +72,28 @@ async function main(argv: string[]) {
   const connections = await client.listConnections()
   const connected = [...new Set(connections.filter((c) => c.state === 'operational' && c.active !== false).map((c) => c.platform))].sort()
   step(`Found ${connections.length} connections across ${connected.length} apps`)
-  let platforms = values.platforms?.split(',').map((p) => p.trim()).filter(Boolean)
+  let platforms = values.platforms
+    ?.split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
   if (!platforms) {
     if (!interactive) fail('Pass --platforms (e.g. --platforms gmail,slack) when not running interactively.')
     platforms = await askPlatforms(connected)
   }
   const missing = platforms.filter((p) => !connected.includes(p))
-  if (missing.length) process.stdout.write(`  note: not connected yet: ${missing.join(', ')}; the agent will offer a connect link for them\n`)
+  if (missing.length)
+    process.stdout.write(`  note: not connected yet: ${missing.join(', ')}; the agent will offer a connect link for them\n`)
 
   // 3. A Mastra project to put it in.
   if (!existsSync(join(dir, 'src/mastra/index.ts'))) {
     if (interactive && !(await confirm(`No Mastra project in ${dir}. Create one with create-mastra?`))) fail('Nothing to do.')
     const parent = dirname(dir)
     mkdirSync(parent, { recursive: true })
-    run('npx', ['-y', 'create-mastra@latest', dir.slice(parent.length + 1), '-l', values.llm!, '--no-git', '--no-install', '--no-skills'], parent)
+    run(
+      'npx',
+      ['-y', 'create-mastra@latest', dir.slice(parent.length + 1), '-l', values.llm!, '--no-git', '--no-install', '--no-skills'],
+      parent,
+    )
     step('Created a Mastra project with create-mastra')
   }
 
@@ -110,7 +118,9 @@ async function main(argv: string[]) {
     step(`Installed @withone/mastra and @mastra/editor with ${pm}`)
   }
 
-  process.stdout.write(`\nNext:\n  cd ${dir}\n  npm run dev        # Studio at http://localhost:4111 — open the "One agent", or add One tools to any agent in the editor\n`)
+  process.stdout.write(
+    `\nNext:\n  cd ${dir}\n  npm run dev        # Studio at http://localhost:4111 — open the "One agent", or add One tools to any agent in the editor\n`,
+  )
 }
 
 function writeAgent(ctx: Ctx) {
@@ -166,7 +176,10 @@ async function askPlatforms(connected: string[]): Promise<string[]> {
   const rl = createInterface({ input: process.stdin, output: process.stdout })
   const answer = await rl.question('Apps for the agent (comma-separated): ')
   rl.close()
-  const picked = answer.split(',').map((p) => p.trim()).filter(Boolean)
+  const picked = answer
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
   if (!picked.length) fail('No apps chosen.')
   return picked
 }

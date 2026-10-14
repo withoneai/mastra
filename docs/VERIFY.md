@@ -11,7 +11,7 @@ Run it in WSL/Linux or macOS. Studio at `http://localhost:4111` also opens from 
   - you're logged in with the One CLI (`one whoami` shows the environment and `apiBase`), or
   - you have a key (`sk_test_…` or `sk_live_…`) to put in `.env` in step 2.
 - The **app connections** the steps use. The examples use `linear` and `cal-com`, which the dev sandbox account has. On another account, swap in apps you have connected (`one list`).
-- *(Optional, step 6 only)* A model key for chatting with the agent, e.g. `ANTHROPIC_API_KEY`.
+- _(Optional, step 6 only)_ A model key for chatting with the agent, e.g. `ANTHROPIC_API_KEY`.
 
 ## 1. Clone, install, run the offline tests
 
@@ -149,7 +149,7 @@ Then in Studio:
 
 1. On **Agents**, click **Create agent**.
 2. Fill in **Identity** (a name, and any provider/model, e.g. Anthropic / `claude-sonnet-5-5`) and **Instructions**. Both are required before **Create agent** turns on. The other steps (Agents, Scorers, Workflows, Memory, Variables) are optional.
-3. In **Tools**, under integration tools, **One** shows as *Available* ("Act in 972+ apps through your One connections").
+3. In **Tools**, under integration tools, **One** shows as _Available_ ("Act in 972+ apps through your One connections").
 4. Click **One**. The left column lists all One apps. Studio draws that list and it has no search box, so either scroll to **Linear**, or type `linear` in the search box with **All** selected, which lists Linear's actions.
 5. Click **Linear** and search `list issues`. "List Issues" is first (see `docs/screenshots/studio-one-linear-tools.png`). Tool descriptions read "POST /graphql" because Linear's actions have no description in One's catalog.
 6. Tick **List Issues**, then **Add tools**. Studio doesn't ask for a connection; with none pinned, the tool uses your first working Linear connection, the same default as `oneTools()`.
@@ -165,7 +165,7 @@ Then in Studio:
 
 > Steps 1–8 were clicked through in Studio 1.77 on 2026-10-14. Step 8 failed (no tools) before `fix(provider)` cb56039: Studio saves no connection, and the provider rejected that.
 
-To try **Connect** in the editor, pick an app you haven't connected. Studio opens One's dashboard on that app's connect dialog. After you connect, Studio's status poll turns *completed* and the new connection is tagged on One with an `oneauth_…` id.
+To try **Connect** in the editor, pick an app you haven't connected. Studio opens One's dashboard on that app's connect dialog. After you connect, Studio's status poll turns _completed_ and the new connection is tagged on One with an `oneauth_…` id.
 
 ## 6. Chat with the agent (needs a model key)
 
@@ -207,7 +207,7 @@ Here the agent acts for **each of your app's users** with only what that user gr
 **a. Create a Connect app.** Connect keys work on **production** only, so use `https://app.withone.ai`, not the dev dashboard:
 
 1. **Developers → Connect → New app**. Register the callback exactly as `http://localhost:4111/one/callback`.
-2. *(Optional)* Create a **permission set** (e.g. Linear read) and copy its ID. Without one, the consent page lists your connections and you choose.
+2. _(Optional)_ Create a **permission set** (e.g. Linear read) and copy its ID. Without one, the consent page lists your connections and you choose.
 3. On the app's page, **Credentials → Connect keys → create**. It is shown once.
 
 **b. Add the credentials** to `examples/studio/.env`:

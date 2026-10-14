@@ -127,7 +127,11 @@ export async function oneStep(options: OneStepOptions) {
         body: inputData?.body,
       })
       if (!res.ok && failOnError) {
-        throw new OneApiError(res.status, JSON.stringify(res.data), `${action.title} failed with ${res.status}: ${JSON.stringify(res.data).slice(0, 500)}`)
+        throw new OneApiError(
+          res.status,
+          JSON.stringify(res.data),
+          `${action.title} failed with ${res.status}: ${JSON.stringify(res.data).slice(0, 500)}`,
+        )
       }
       return res
     },

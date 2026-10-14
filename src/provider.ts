@@ -121,9 +121,7 @@ export class OneToolProvider extends BaseToolProvider {
       if (search) {
         const rank = new Map((await this.client.searchActions(toolkit, search, perPage)).map((a, i) => [a.systemId, i]))
         ids = new Map(
-          [...ids]
-            .filter(([, action]) => rank.has(action.systemId))
-            .sort(([, a], [, b]) => rank.get(a.systemId)! - rank.get(b.systemId)!),
+          [...ids].filter(([, action]) => rank.has(action.systemId)).sort(([, a], [, b]) => rank.get(a.systemId)! - rank.get(b.systemId)!),
         )
       }
       for (const [slug, action] of ids) rows.push({ slug, name: action.title, toolkit, description: `${action.method} ${action.path}` })
