@@ -13,12 +13,14 @@ Run it in WSL/Linux or macOS. Studio at `http://localhost:4111` also opens from 
 - The **app connections** the steps use. The examples use `linear` and `cal-com`, which the dev sandbox account has. On another account, swap in apps you have connected (`one list`).
 - *(Optional, step 6 only)* A model key for chatting with the agent, e.g. `ANTHROPIC_API_KEY`.
 
-Set the environment you're testing against:
+Set the environment you're testing against, either in a `.env` file at the repo root (`cp .env.example .env`, then fill it in) or exported in your shell:
 
 ```bash
-export ONE_SECRET=sk_test_…                                # your key
-export ONE_BASE_URL=https://development-api.withone.ai    # omit for production
+ONE_SECRET=sk_test_…                                # your key
+ONE_BASE_URL=https://development-api.withone.ai     # omit for production
 ```
+
+The `pnpm smoke*` scripts load `.env` automatically, and values you've exported take precedence. Mastra apps (`npm run dev`) read their own project's `.env`, which `init` writes for you.
 
 ## 1. Clone, install, run the offline tests
 
@@ -45,7 +47,7 @@ pnpm smoke
 - A second, cached resolve that takes a few ms.
 
 ```bash
-node --import tsx scripts/provider-smoke.ts
+pnpm smoke:provider
 ```
 
 **Expect:**
@@ -57,7 +59,7 @@ node --import tsx scripts/provider-smoke.ts
 - `getAuthStatus` reports `pending`, and `failed` for an unknown id.
 
 ```bash
-node --import tsx scripts/workflow-smoke.ts
+pnpm smoke:workflow
 ```
 
 **Expect three lines:**

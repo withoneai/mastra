@@ -158,11 +158,11 @@ pnpm test            # 52 offline tests against fake One / Connect APIs, plus re
 pnpm typecheck
 pnpm build
 
-# Live, read-only checks against a real One account:
-export ONE_SECRET=sk_test_… ONE_BASE_URL=https://development-api.withone.ai
+# Live, read-only checks against a real One account (reads .env, or exported vars):
+cp .env.example .env   # then set ONE_SECRET (and ONE_BASE_URL for dev)
 pnpm smoke                                   # oneTools
-node --import tsx scripts/provider-smoke.ts  # OneToolProvider
-node --import tsx scripts/workflow-smoke.ts  # oneStep with approve / decline
+pnpm smoke:provider   # OneToolProvider
+pnpm smoke:workflow   # oneStep with approve / decline
 ```
 
 `examples/studio` is a Mastra app that uses every entry point. Run it with `pnpm install --ignore-workspace && npx mastra dev`.

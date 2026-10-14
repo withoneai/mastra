@@ -36,7 +36,9 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "smoke": "node --env-file-if-exists=.env --import tsx scripts/smoke.ts"
+    "smoke": "node --env-file-if-exists=.env --import tsx scripts/smoke.ts",
+    "smoke:provider": "node --env-file-if-exists=.env --import tsx scripts/provider-smoke.ts",
+    "smoke:workflow": "node --env-file-if-exists=.env --import tsx scripts/workflow-smoke.ts"
   },
   "peerDependencies": {
     "@mastra/core": ">=1.76.0 <2.0.0",
