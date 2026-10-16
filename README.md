@@ -1,6 +1,6 @@
 # @withone/mastra
 
-Give your [Mastra](https://mastra.ai) agents and workflows the apps you've connected on [One](https://withone.ai): 972+ apps including Gmail, Slack, Linear, HubSpot and Stripe. One handles auth, so there's no OAuth code and no provider SDKs.
+Give your [Mastra](https://mastra.ai) agents and workflows the apps you've connected on [One](https://withone.ai): 995+ apps including Gmail, Slack, Linear, HubSpot and Stripe. One handles auth, so there's no OAuth code and no provider SDKs.
 
 ![One in Mastra Studio's tool picker](docs/studio-one-tools.png)
 

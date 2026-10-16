@@ -62,7 +62,7 @@ export class OneToolProvider extends BaseToolProvider {
   readonly info: ToolProviderInfo = {
     id: PROVIDER_ID,
     name: 'One',
-    description: 'Act in 972+ apps through your One connections',
+    description: 'Act in 995+ apps through your One connections',
   }
 
   readonly capabilities: ToolProviderCapabilities = {

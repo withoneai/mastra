@@ -1,6 +1,6 @@
 ---
 name: one-mastra
-description: Give Mastra agents and workflows access to apps connected through One (Gmail, Slack, Stripe, HubSpot and 972+ apps in all) with @withone/mastra. Use when adding app integrations, third-party tools, per-user connections, approval gates on app actions, or webhook-triggered workflows to a Mastra project.
+description: Give Mastra agents and workflows access to apps connected through One (Gmail, Slack, Stripe, HubSpot and 995+ apps in all) with @withone/mastra. Use when adding app integrations, third-party tools, per-user connections, approval gates on app actions, or webhook-triggered workflows to a Mastra project.
 ---
 
 # @withone/mastra
