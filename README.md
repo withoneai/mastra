@@ -1,17 +1,35 @@
-# @withone/mastra
+<p align="center">
+  <img src="docs/banner.svg" alt="@withone/mastra: Gmail, Slack, Linear, HubSpot, Stripe and 1000+ more apps as tools, workflow steps and triggers for Mastra agents" width="100%">
+</p>
 
-Give your [Mastra](https://mastra.ai) agents and workflows the apps you've connected on [One](https://withone.ai): 995+ apps including Gmail, Slack, Linear, HubSpot and Stripe. One handles auth, so there's no OAuth code and no provider SDKs.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@withone/mastra"><img src="https://img.shields.io/npm/v/@withone/mastra?color=5b54e0&label=npm" alt="npm version"></a>
+  <a href="https://www.npmjs.com/package/@withone/mastra"><img src="https://img.shields.io/npm/dm/@withone/mastra?color=5b54e0" alt="npm downloads"></a>
+  <a href="https://github.com/withoneai/mastra/actions/workflows/ci.yml"><img src="https://github.com/withoneai/mastra/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://mastra.ai"><img src="https://img.shields.io/badge/Mastra-1.76%2B-111114" alt="Mastra 1.76+"></a>
+  <img src="https://img.shields.io/badge/node-%E2%89%A522.13-111114" alt="Node 22.13+">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-111114" alt="Apache-2.0 license"></a>
+</p>
 
-![One in Mastra Studio's tool picker](docs/studio-one-tools.png)
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#add-one-to-an-agent">Agents</a> ·
+  <a href="#build-agents-in-mastra-studio">Studio</a> ·
+  <a href="#act-for-each-of-your-users-one-connect">Per-user</a> ·
+  <a href="#run-one-actions-in-workflows">Workflows</a> ·
+  <a href="#start-workflows-from-app-events">Triggers</a> ·
+  <a href="#troubleshooting">Troubleshooting</a>
+</p>
 
-- [Quick start](#quick-start)
-- [Add One to an agent](#add-one-to-an-agent)
-- [Build agents in Mastra Studio](#build-agents-in-mastra-studio)
-- [Act for each of your users (One Connect)](#act-for-each-of-your-users-one-connect)
-- [Run One actions in workflows](#run-one-actions-in-workflows)
-- [Start workflows from app events](#start-workflows-from-app-events)
-- [Configuration](#configuration)
-- [Troubleshooting](#troubleshooting)
+Give your [Mastra](https://mastra.ai) agents and workflows the apps you've connected on [One](https://withone.ai). That's 1000+ apps, including Gmail, Slack, Linear, HubSpot and Stripe. One handles auth, so you write no OAuth code, install no provider SDKs and keep every credential away from the model.
+
+| You want to…                                         | Use                                                                |
+| ---------------------------------------------------- | ------------------------------------------------------------------ |
+| Give an agent your apps as tools                     | [`oneTools()`](#add-one-to-an-agent)                               |
+| Let your team pick apps and actions in Mastra Studio | [`OneToolProvider`](#build-agents-in-mastra-studio)                |
+| Let each of your users connect their own apps        | [`oneTools({ connect })`](#act-for-each-of-your-users-one-connect) |
+| Call an app as a deterministic workflow step         | [`oneStep()`](#run-one-actions-in-workflows)                       |
+| Start a workflow when something happens in an app    | [`oneTrigger()`](#start-workflows-from-app-events)                 |
 
 ## Quick start
 
@@ -31,7 +49,7 @@ cd my-agent && npm run dev        # Mastra Studio at http://localhost:4111
 
 Add your model key to `.env`, open Studio, pick **One agent**, and ask _"What are my three most recent Linear issues?"_
 
-**Or try it from a clone**, with no project at all: put `ONE_SECRET` and a model key in `.env`, then ask a question about your apps.
+**Or try it from a clone**, with no project to set up. Put `ONE_SECRET` and a model key in `.env`, then ask a question about your apps:
 
 ```bash
 git clone https://github.com/withoneai/mastra && cd mastra && pnpm install
@@ -143,7 +161,11 @@ To mix One's tools with your own: `tools: async (ctx) => ({ ...(await one(ctx)),
 
 ## Build agents in Mastra Studio
 
-Register One as a tool provider and anyone on your team can build agents with One's apps in Studio, without code:
+Register One as a tool provider, and anyone on your team can build agents with One's apps in Studio without writing code.
+
+<p align="center">
+  <img src="docs/studio-one-tools.svg" alt="One in the Mastra Studio agent editor: pick an app, search its actions, tick the ones you want" width="860">
+</p>
 
 ```ts
 import { Mastra } from '@mastra/core'
@@ -164,7 +186,7 @@ In Studio go to **Agents → Create agent → Tools → One**. Pick an app, sear
 
 ## Act for each of your users (One Connect)
 
-If you're building a product, each of your users can connect _their own_ apps, and your agent acts with exactly the access they granted.
+If you're building a product, each of your users can connect _their own_ apps, and your agent acts with exactly the access each one granted.
 
 1. Create a Connect app at [app.withone.ai](https://app.withone.ai) → **Developers → Connect** and register your callback URL.
 2. Add the sign-in routes with [`@withone/connect`](https://www.npmjs.com/package/@withone/connect) (`createOneConnect` and `createOneConnectRoutes`). Its `userStore` saves one reference per user.
@@ -265,6 +287,10 @@ Every option can also be passed in code (`secret`, `baseUrl`, …).
 | No **Create agent** button in Studio                             | Mastra 1.77 hides it; start Studio with `MASTRA_EXPERIMENTAL_UI=true`                                                              |
 | A write runs without asking                                      | Add `requireApproval: 'writes'` (or `true`) to that app                                                                            |
 
-## Licence
+## Contributing
 
-Apache-2.0
+Issues and pull requests are welcome at [withoneai/mastra](https://github.com/withoneai/mastra/issues). `pnpm check` runs the type-check, lint, format check, tests and build. That's the same gate CI and `npm publish` use.
+
+## License
+
+[Apache-2.0](LICENSE) © One
