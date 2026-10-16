@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+No code changes. The first release published from GitHub Actions with npm trusted publishing and provenance.
+
 ## 0.1.0
 
 First release.

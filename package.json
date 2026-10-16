@@ -1,6 +1,6 @@
 {
   "name": "@withone/mastra",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The apps you've connected on One (Gmail, Slack, Linear, HubSpot, Stripe and 1000+ more) as tools, workflow steps and triggers for Mastra agents.",
   "keywords": [
     "mastra",
