@@ -8,6 +8,6 @@ First release.
 - One Connect: per-user tools with `{ connectKey, loadUser }`, acting only within each user's grant.
 - `OneToolProvider` (`@withone/mastra/provider`): One in Mastra Studio's agent editor.
 - `oneStep()` (`@withone/mastra/workflows`): a One action as a workflow step, with optional approval.
-- `oneTrigger()` (`@withone/mastra/triggers`): starts a workflow from One webhook-relay events.
+- `oneTrigger()` (`@withone/mastra/triggers`): starts a workflow from One webhook-relay events, with `requestContext` to say which user an event belongs to.
 - `npx @withone/mastra init`: wires all of this into a new or existing Mastra project.
 - `examples/agent.ts`: ask an agent with your connected apps a question from the terminal.

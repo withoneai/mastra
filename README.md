@@ -232,7 +232,7 @@ new Mastra({
 })
 ```
 
-It checks the relay signature (`ONE_RELAY_SECRET`), ignores repeats and unlisted event types, and answers `202` with the run id. Point a relay at it with the One CLI:
+It checks the relay signature (`ONE_RELAY_SECRET`), ignores repeats and unlisted event types, and answers `202` with the run id. For a workflow that acts per user (One Connect), say whose event it is: `oneTrigger({ …, requestContext: (event) => ({ userId: userFor(event.connectionId) }) })`. Point a relay at it with the One CLI:
 
 ```bash
 one relay create --connection-key <stripe-key> --create-webhook --event-filters '["charge.failed"]'

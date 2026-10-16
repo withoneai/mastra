@@ -26,6 +26,12 @@ export interface OneTriggerOptions {
   eventTypes?: string[]
   /** Maps the relay event to the workflow's input. Defaults to the event itself. */
   toInput?: (event: OneRelayEvent) => unknown
+  /**
+   * Request-context entries for the run, e.g. `{ userId }` for a workflow that acts per user
+   * (One Connect). Use it to say which of your users an event belongs to, typically from
+   * `event.connectionId`. The event is always available as `oneRelayEvent`.
+   */
+  requestContext?: (event: OneRelayEvent) => Record<string, unknown> | Promise<Record<string, unknown>>
   /** Window in which a repeated `relayEventId` is acknowledged without starting another run. Default 24 h. */
   dedupeWindowMs?: number
 }
@@ -81,7 +87,8 @@ export function oneTrigger(options: OneTriggerOptions) {
       try {
         const workflow = c.get('mastra').getWorkflow(options.workflow)
         const run = await workflow.createRun()
-        const requestContext = new RequestContext([['oneRelayEvent', event]])
+        const extra = (await options.requestContext?.(event)) ?? {}
+        const requestContext = new RequestContext<any>([...Object.entries(extra), ['oneRelayEvent', event]] as Array<[string, any]>)
         const { runId } = await run.startAsync({ inputData: (options.toInput ?? ((e) => e))(event) as any, requestContext })
         return c.json({ accepted: true, runId }, 202)
       } catch (err) {

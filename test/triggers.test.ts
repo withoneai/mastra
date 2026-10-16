@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { Mastra } from '@mastra/core'
+import { createStep, createWorkflow } from '@mastra/core/workflows'
+import { LibSQLStore } from '@mastra/libsql'
+import { z } from 'zod'
 import { oneTrigger, signRelayBody, verifyRelaySignature } from '../src/triggers.js'
 
 describe('relay signatures', () => {
@@ -32,5 +36,43 @@ describe('oneTrigger', () => {
   it('registers a public POST route', () => {
     const route: any = oneTrigger({ path: '/one/stripe', workflow: 'w', secret: 's' })
     expect(route).toMatchObject({ path: '/one/stripe', method: 'POST', requiresAuth: false })
+  })
+
+  it('starts the workflow with the request context the app maps from the event (e.g. which user)', async () => {
+    const seen: Array<{ userId: unknown; eventType: unknown }> = []
+    const record = createStep({
+      id: 'record',
+      inputSchema: z.any(),
+      outputSchema: z.any(),
+      execute: async ({ requestContext }) => {
+        seen.push({ userId: requestContext.get('userId'), eventType: (requestContext.get('oneRelayEvent') as any)?.eventType })
+        return {}
+      },
+    })
+    const wf = createWorkflow({ id: 'w', inputSchema: z.any(), outputSchema: z.any() }).then(record).commit()
+    const mastra = new Mastra({ workflows: { w: wf }, storage: new LibSQLStore({ id: 't', url: ':memory:' }), logger: false })
+    const route: any = oneTrigger({
+      path: '/one/linear',
+      workflow: 'w',
+      secret: 's',
+      requestContext: (event) => ({ userId: event.connectionId === 'conn-1' ? 'alice' : undefined }),
+    })
+    const body = JSON.stringify({
+      relayEventId: 'e1',
+      platform: 'linear',
+      eventType: 'Issue',
+      payload: {},
+      timestamp: 't',
+      connectionId: 'conn-1',
+    })
+    const c = {
+      req: { text: async () => body, header: (n: string) => (n === 'x-relay-signature' ? signRelayBody(body, 's') : undefined) },
+      json: (b: unknown, status = 200) => ({ b, status }),
+      get: (k: string) => (k === 'mastra' ? mastra : undefined),
+    }
+    const res = await route.handler(c)
+    expect(res).toMatchObject({ status: 202, b: { accepted: true } })
+    await expect.poll(() => seen.length).toBe(1)
+    expect(seen[0]).toEqual({ userId: 'alice', eventType: 'Issue' })
   })
 })

@@ -82,7 +82,7 @@ import { oneTrigger } from '@withone/mastra/triggers'
 new Mastra({ server: { apiRoutes: [oneTrigger({ path: '/one/stripe', workflow: 'refundFlow', eventTypes: ['charge.failed'] })] } })
 ```
 
-Set `ONE_RELAY_SECRET` to the relay's signing secret. Point a One relay `url` action at the route (`one relay create … && one relay activate <id> --actions '[{"type":"url","url":"https://…/one/stripe","secret":"…"}]'`).
+Set `ONE_RELAY_SECRET` to the relay's signing secret. For per-user workflows pass `requestContext: (event) => ({ userId: … })` so the run knows whose event it is. Point a One relay `url` action at the route (`one relay create … && one relay activate <id> --actions '[{"type":"url","url":"https://…/one/stripe","secret":"…"}]'`).
 
 ## Environment
 
